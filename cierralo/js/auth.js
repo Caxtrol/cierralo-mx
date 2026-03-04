@@ -66,16 +66,18 @@ window.addEventListener('load', async () => {
   sb.auth.onAuthStateChange(async (event, session) => {
     console.log('[Auth]', event, session?.user?.id || 'sin sesión');
 
-    if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+    if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'INITIAL_SESSION') {
       if (session?.user) {
         // Cancelar fallback de OAuth si estaba corriendo
         if (window._fallbackOAuth) { clearTimeout(window._fallbackOAuth); window._fallbackOAuth = null; }
         window._authToken    = session.access_token;
         window._refreshToken = session.refresh_token;
         window._currentUid   = session.user.id;
+        // Guardar sesión + timestamp de último uso (para inactividad de 3 días)
         localStorage.setItem('cierralo_session', JSON.stringify({
           access_token:  session.access_token,
-          refresh_token: session.refresh_token
+          refresh_token: session.refresh_token,
+          ultimo_uso:    Date.now()
         }));
         currentUser = session.user;
 
@@ -111,10 +113,22 @@ window.addEventListener('load', async () => {
   if (sesionRaw) {
     try {
       const sesion = JSON.parse(sesionRaw);
+
+      // Cerrar sesión si lleva más de 3 días sin usar la app
+      const TRES_DIAS = 3 * 24 * 60 * 60 * 1000;
+      if (sesion?.ultimo_uso && (Date.now() - sesion.ultimo_uso) > TRES_DIAS) {
+        console.log('[Auth] Inactividad de 3 días — cerrando sesión');
+        localStorage.removeItem('cierralo_session');
+        lanzarLogin(fallback);
+        return;
+      }
+
       if (sesion?.refresh_token) {
         const { error } = await sb.auth.refreshSession({ refresh_token: sesion.refresh_token });
         if (error) {
           console.warn('[Auth] refreshSession falló:', error.message);
+          // Limpiar sesión inválida
+          localStorage.removeItem('cierralo_session');
           clearTimeout(fallback);
           if (!appIniciada) {
             document.getElementById('splash').classList.add('hidden');
