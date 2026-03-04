@@ -290,8 +290,6 @@ function getPlanActual() {
 }
 
 // ── Verificar si el vendedor puede realizar una acción ──
-// accion: clave de PLANES_LIMITES (ej: 'excel_import', 'semaforo_wa')
-// valorActual: solo para límites numéricos (ej: conteo de prospectos)
 function puedeHacer(accion, valorActual) {
   const plan   = getPlanActual();
   const limite = PLANES_LIMITES[plan];
@@ -314,11 +312,53 @@ function puedeHacer(accion, valorActual) {
 function mensajesIARestantes() {
   const plan  = getPlanActual();
   const max   = PLANES_LIMITES[plan].mensajes_ia_mes;
-  const usado = vendedorData?.mensajes_ia_mes || 0;
+  const usado = vendedorData?.mensajes_ia_mes_usado || 0;
   return Math.max(0, max - usado);
 }
 
-// ── Modal de paywall — aparece cuando algo está bloqueado ──
+// ── Verificar límite de prospectos antes de guardar uno nuevo ──
+// Retorna { puede: true/false, usados: N, limite: N, advertencia: true/false }
+function verificarLimiteProspectos() {
+  const plan   = getPlanActual();
+  const limite = PLANES_LIMITES[plan].prospectos_max;
+
+  // Pro y Elite no tienen límite — siempre puede
+  if (limite === Infinity) return { puede: true, usados: prospectos.length, limite: Infinity, advertencia: false };
+
+  const activos = prospectos.filter(p => p.etapa !== 'perdido').length;
+
+  if (activos >= limite) {
+    // Llegó al tope — mostrar paywall
+    mostrarPaywall('prospectos_max');
+    return { puede: false, usados: activos, limite, advertencia: false };
+  }
+
+  // Advertencia cuando le faltan 3 o menos
+  const advertencia = activos >= limite - 3;
+  return { puede: true, usados: activos, limite, advertencia };
+}
+
+// ── Registrar uso de mensaje IA (suma 1 al contador mensual) ──
+// Se llama después de que la IA genera un mensaje exitosamente
+async function registrarMensajeIA() {
+  if (!vendedorData) return;
+
+  const uid = currentUser?.id || window._currentUid;
+  if (!uid) return;
+
+  // Sumar 1 al contador en memoria
+  vendedorData.mensajes_ia_mes_usado = (vendedorData.mensajes_ia_mes_usado || 0) + 1;
+
+  // Persistir en Supabase en segundo plano (no bloquea la UI)
+  sbAuth().from('vendedores')
+    .update({ mensajes_ia_mes_usado: vendedorData.mensajes_ia_mes_usado })
+    .eq('id', uid)
+    .then(({ error }) => {
+      if (error) console.warn('No se pudo guardar contador IA:', error.message);
+    });
+}
+
+// ── Modal de paywall ──
 function mostrarPaywall(accion) {
   const info = PAYWALL_TEXTOS[accion] || {
     titulo:  '⭐ Función Premium',
@@ -329,7 +369,6 @@ function mostrarPaywall(accion) {
   const planLabel = info.plan === 'elite' ? 'Elite $499/mes' : 'Pro $199/mes';
   const planColor = info.plan === 'elite' ? 'var(--purple)' : 'var(--orange)';
 
-  // Crear el modal si no existe en el DOM
   let overlay = document.getElementById('modal-paywall');
   if (!overlay) {
     overlay = document.createElement('div');
@@ -349,14 +388,11 @@ function mostrarPaywall(accion) {
       </div>
     `;
     document.body.appendChild(overlay);
-
-    // Cerrar tocando el fondo oscuro
     overlay.addEventListener('click', e => {
       if (e.target === overlay) cerrarPaywall();
     });
   }
 
-  // Actualizar contenido según la acción bloqueada
   const partes = info.titulo.split(' ');
   document.getElementById('paywall-icon').textContent  = partes[0];
   document.getElementById('paywall-title').textContent = partes.slice(1).join(' ');
