@@ -539,7 +539,7 @@ async function loadVendedor() {
       const telefonoReg = _loginTelefono
         || currentUser?.phone
         || localStorage.getItem('cierralo_otp_tel')
-        || '';
+        || (esGoogle ? (currentUser?.email || 'google-user') : 'sin-telefono');
 
       const { data: nuevo, error: errInsert } = await sbAuth().from('vendedores')
         .insert({
