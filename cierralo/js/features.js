@@ -8,6 +8,21 @@ function renderSemaforoWA(){
   const card = document.getElementById('semaforo-wa-card');
   if(!card) return;
 
+  // ── BLOQUEO POR PLAN: Solo Elite puede usar el semáforo ──
+  if(!puedeHacer('semaforo_wa')){
+    card.innerHTML = `
+      <div style="background:var(--s2);border:1px solid var(--border);border-radius:12px;padding:14px;display:flex;align-items:center;gap:12px;cursor:pointer;"
+           onclick="mostrarPaywall('semaforo_wa')">
+        <span style="font-size:28px;flex-shrink:0;">🚦</span>
+        <div style="flex:1;">
+          <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:3px;">Semáforo WhatsApp — Plan Elite</div>
+          <div style="font-size:11px;color:var(--text3);line-height:1.5;">Conecta tu número Business y la app cuida tu reputación automáticamente.</div>
+        </div>
+        <div style="background:linear-gradient(90deg,#F59E0B,#FF6B35);color:white;font-size:10px;font-weight:700;padding:4px 10px;border-radius:20px;flex-shrink:0;">⭐ Elite</div>
+      </div>`;
+    return;
+  }
+
   // Solo mostrar si tiene API de WhatsApp activa (health_score_wa != null en BD)
   const tieneAPI = vendedorData?.health_score_wa !== null && vendedorData?.health_score_wa !== undefined;
 
@@ -16,8 +31,8 @@ function renderSemaforoWA(){
       <div style="background:var(--s2);border:1px solid var(--border);border-radius:12px;padding:14px;display:flex;align-items:center;gap:12px;">
         <span style="font-size:28px;flex-shrink:0;">🔒</span>
         <div>
-          <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:3px;">Disponible en Plan Elite</div>
-          <div style="font-size:11px;color:var(--text3);line-height:1.5;">Conecta tu número de WhatsApp Business y la app cuida tu reputación automáticamente.</div>
+          <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:3px;">Conecta tu WhatsApp Business</div>
+          <div style="font-size:11px;color:var(--text3);line-height:1.5;">Conecta tu número y la app cuida tu reputación automáticamente.</div>
         </div>
       </div>`;
     return;
@@ -45,7 +60,6 @@ function renderSemaforoWA(){
     consejo = 'Solo responde conversaciones ya iniciadas. No envíes mensajes nuevos hasta que el score suba.';
   }
 
-  // Barra de progreso
   const pct = Math.max(2, score);
   const barColor = score >= 80 ? '#22C55E' : score >= 50 ? '#F59E0B' : '#EF4444';
 
@@ -74,13 +88,11 @@ function renderSemaforoWA(){
 
 // Verificar límite antes de copiar mensaje al portapapeles
 function verificarLimiteWA(){
-  // Sin API conectada: no hay restricción
   if(vendedorData?.health_score_wa === null || vendedorData?.health_score_wa === undefined) return true;
 
   const score  = vendedorData.health_score_wa;
   const limite = vendedorData?.limite_diario ?? 30;
 
-  // Contar mensajes enviados hoy (desde localStorage)
   const hoy = new Date().toDateString();
   let conteoHoy = 0;
   try {
@@ -112,10 +124,9 @@ function registrarMensajeEnviado(){
 function calcularLogrosSemanales(){
   const hoy    = new Date();
   const lunes  = new Date(hoy);
-  lunes.setDate(hoy.getDate() - ((hoy.getDay() + 6) % 7)); // lunes de esta semana
+  lunes.setDate(hoy.getDate() - ((hoy.getDay() + 6) % 7));
   lunes.setHours(0,0,0,0);
 
-  // Datos de esta semana
   const prospectosSemana = prospectos.filter(p => {
     const d = new Date(p.created_at || p.updated_at || 0);
     return d >= lunes;
@@ -133,7 +144,6 @@ function calcularLogrosSemanales(){
   });
   const score = vendedorData?.health_score_wa ?? null;
 
-  // Evaluar medallas
   const medallas = [];
 
   if(reactivados.length >= 3){
@@ -181,12 +191,11 @@ function mostrarWrappedBanner(){
   const hoy    = new Date();
   const esLunes = hoy.getDay() === 1;
 
-  // Mostrar si es lunes O si tiene medallas (logro conseguido)
   const key    = 'cmx_wrapped_visto_' + getISOWeek();
   const visto  = localStorage.getItem(key);
-  if(visto && !esLunes) return; // ya vio el wrapped esta semana
+  if(visto && !esLunes) return;
 
-  if(logros.medallas.length === 0 && !esLunes) return; // sin medallas y no es lunes, no molestar
+  if(logros.medallas.length === 0 && !esLunes) return;
 
   const medallaTexto = logros.medallas.length > 0
     ? logros.medallas.map(m => m.emoji).join(' ') + ' ' + logros.medallas.length + ' medalla' + (logros.medallas.length > 1 ? 's' : '') + ' esta semana'
@@ -218,7 +227,6 @@ function abrirWrapped(){
   if(!modal) return;
 
   const hoy   = new Date();
-  const dias  = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
   const meses = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
   const semana = 'Semana del ' + meses[hoy.getMonth()] + ' ' + hoy.getFullYear();
 
@@ -236,7 +244,6 @@ function abrirWrapped(){
         <div style="font-size:13px;color:var(--text2);">Esta semana sin medallas — ¡la próxima es tuya!</div>
        </div>`;
 
-  // Escudo de defensa IA (texto estático por ahora, se puede conectar a Claude en Fase 2)
   const escudo = logros.ganados > 0
     ? `Semana positiva: ${logros.ganados} venta${logros.ganados>1?'s':''} cerrada${logros.ganados>1?'s':''}. ${logros.reactivados} prospecto${logros.reactivados!==1?'s':''} contactado${logros.reactivados!==1?'s':''}.`
     : `${logros.reactivados} prospecto${logros.reactivados!==1?'s':''} contactado${logros.reactivados!==1?'s':''}. Pipeline activo con ${logros.prospectosSemana} nuevo${logros.prospectosSemana!==1?'s':''} esta semana.`;
@@ -248,8 +255,6 @@ function abrirWrapped(){
         <div style="font-family:'Syne',sans-serif;font-weight:800;font-size:22px;color:var(--text);margin-bottom:4px;">Tu Semana</div>
         <div style="font-size:12px;color:var(--text3);">${semana}</div>
       </div>
-
-      <!-- Stats rápidos -->
       <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:16px;">
         <div style="background:var(--s2);border-radius:10px;padding:10px;text-align:center;">
           <div style="font-family:'Syne',sans-serif;font-size:24px;font-weight:800;color:var(--green);">${logros.ganados}</div>
@@ -264,31 +269,20 @@ function abrirWrapped(){
           <div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.4px;">Riesgo</div>
         </div>
       </div>
-
-      <!-- Medallas -->
       <div style="font-family:'Syne',sans-serif;font-size:12px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:8px;">Medallas</div>
-      <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px;">
-        ${medallaHTML}
-      </div>
-
-      <!-- Escudo IA -->
+      <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px;">${medallaHTML}</div>
       <div style="background:linear-gradient(135deg,#4A9EFF15,var(--s2));border:1px solid #4A9EFF30;border-radius:12px;padding:12px 14px;margin-bottom:16px;">
         <div style="font-size:10px;font-weight:700;color:var(--blue);text-transform:uppercase;letter-spacing:.6px;margin-bottom:6px;">🛡️ Escudo de Defensa</div>
         <div style="font-size:12px;color:var(--text2);line-height:1.6;font-style:italic;">"${escudo}"</div>
         <div style="font-size:10px;color:var(--text3);margin-top:4px;">Muéstrale esto a tu gerente si te pregunta qué hiciste esta semana.</div>
       </div>
-
-      <!-- Botón compartir -->
       <button onclick="compartirWrapped()" style="width:100%;background:#25D366;color:white;border:none;border-radius:10px;padding:13px;font-family:'Syne',sans-serif;font-weight:700;font-size:13px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;">
         <span style="font-size:18px;">💬</span> Compartir por WhatsApp
       </button>
     </div>`;
 
   document.getElementById('modal-wrapped').classList.add('open');
-
-  // Marcar como visto esta semana
   localStorage.setItem('cmx_wrapped_visto_' + getISOWeek(), '1');
-  // Ocultar banner después de abrir
   const banner = document.getElementById('wrapped-banner');
   if(banner) banner.style.display = 'none';
 }
@@ -297,6 +291,12 @@ function abrirWrapped(){
 // ── IMPORTACIÓN EXCEL / CSV ──────────────────────────────────────────────────
 
 function abrirImportExcel(){
+  // ── BLOQUEO POR PLAN: Solo Pro y Elite pueden importar Excel ──
+  if(!puedeHacer('excel_import')){
+    mostrarPaywall('excel_import');
+    return;
+  }
+
   excelDataParsed = [];
   document.getElementById('excel-paso1').style.display = 'block';
   document.getElementById('excel-paso2').style.display = 'none';
@@ -315,7 +315,6 @@ function procesarArchivoExcel(input){
       let filas = [];
 
       if(file.name.endsWith('.csv')){
-        // CSV — parseo manual
         const texto = e.target.result;
         const lineas = texto.split(/\r?\n/).filter(l => l.trim());
         const headers = lineas[0].split(',').map(h => h.trim().toLowerCase().replace(/[^a-z0-9]/g,''));
@@ -326,12 +325,10 @@ function procesarArchivoExcel(input){
           filas.push(obj);
         }
       } else {
-        // Excel — SheetJS
         const data = new Uint8Array(e.target.result);
         const wb   = XLSX.read(data, { type: 'array' });
         const ws   = wb.Sheets[wb.SheetNames[0]];
         filas = XLSX.utils.sheet_to_json(ws, { defval: '' });
-        // Normalizar keys a minúsculas sin espacios
         filas = filas.map(row => {
           const clean = {};
           Object.keys(row).forEach(k => {
@@ -367,7 +364,6 @@ function mostrarPreviewExcel(filas){
     return;
   }
 
-  // Detectar columnas automáticamente
   const muestra = filas[0];
   const colNombre = detectarColumna(muestra, ['nombre','name','cliente','prospecto','contacto','razon_social']);
   const colTel    = detectarColumna(muestra, ['telefono','tel','phone','celular','movil','whatsapp','numero']);
@@ -387,7 +383,6 @@ function mostrarPreviewExcel(filas){
     return;
   }
 
-  // Filtrar filas válidas y detectar duplicados
   const validas = filas.filter(r => r[colNombre] && r[colTel]);
   let nuevos = 0, duplicados = 0;
   const procesadas = [];
@@ -395,7 +390,6 @@ function mostrarPreviewExcel(filas){
   validas.forEach(row => {
     const tel = row[colTel].replace(/\D/g,'');
     const nombre = row[colNombre].trim();
-    // Verificar si ya existe en prospectos actuales
     const existe = prospectos.some(p =>
       (p.telefono || '').replace(/\D/g,'').includes(tel.slice(-8)) ||
       similitud(p.nombre.toLowerCase(), nombre.toLowerCase()) > 0.85
@@ -411,8 +405,7 @@ function mostrarPreviewExcel(filas){
 
   excelDataParsed = procesadas.filter(r => r._estado === 'nuevo');
 
-  // Calcular comisión potencial (estimado)
-  const comisionEst = nuevos * 4500; // promedio comisión por venta en MX
+  const comisionEst = nuevos * 4500;
 
   document.getElementById('excel-preview-content').innerHTML = `
     <div style="background:linear-gradient(135deg,#F59E0B15,var(--s2));border:1px solid #F59E0B30;border-radius:12px;padding:14px;margin-bottom:12px;">
@@ -461,7 +454,7 @@ async function importarProspectosExcel(){
   const btn = document.querySelector('#excel-paso2 button:last-child');
   if(btn){ btn.textContent = 'Importando...'; btn.disabled = true; }
 
-  const LOTE = 10; // máx 10 a la vez, respetando semáforo
+  const LOTE = 10;
   let importados = 0, errores = 0;
 
   for(let i = 0; i < excelDataParsed.length; i += LOTE){
@@ -480,11 +473,9 @@ async function importarProspectosExcel(){
     if(error){ errores += lote.length; }
     else { importados += lote.length; }
 
-    // Pausa entre lotes para no saturar
     if(i + LOTE < excelDataParsed.length) await new Promise(r => setTimeout(r, 300));
   }
 
-  // Mostrar resultado
   document.getElementById('excel-paso2').style.display = 'none';
   document.getElementById('excel-paso3').style.display = 'block';
   document.getElementById('excel-resultado-content').innerHTML = `
@@ -505,7 +496,6 @@ async function importarProspectosExcel(){
 
 function compartirWrapped(){
   const logros = calcularLogrosSemanales();
-  const nombre = vendedorData?.nombre?.split(' ')[0] || 'Vendedor';
   const medalEmojis = logros.medallas.map(m=>m.emoji).join('');
   const texto = `${medalEmojis ? medalEmojis+' ' : ''}Esta semana en Ciérralo.mx:
 ✅ ${logros.ganados} venta${logros.ganados!==1?'s':''} cerrada${logros.ganados!==1?'s':''}
@@ -553,7 +543,6 @@ function renderPerfilPublico(){
     return;
   }
 
-  // Perfil activo — mostrar preview + stats
   const estrellas = score > 0
     ? '⭐'.repeat(Math.round(score / 20)).padEnd(5, '☆').substring(0,5)
     : '— sin reseñas aún';
@@ -600,7 +589,6 @@ function renderPerfilPublico(){
 }
 
 function abrirEditorPerfilPublico(){
-  // Rellenar con datos actuales
   const bio  = document.getElementById('pp-bio');
   const exp  = document.getElementById('pp-experiencia');
   const espec = document.getElementById('pp-especialidad');
@@ -615,9 +603,7 @@ function abrirEditorPerfilPublico(){
   if(espec)  espec.value  = vendedorData?.especialidades   || '';
   if(marcas) marcas.value = vendedorData?.marcas_experiencia || '';
 
-  // Toggle estado
   actualizarToggle(vendedorData?.perfil_publico_activo || false);
-
   document.getElementById('modal-perfil-publico').classList.add('open');
 }
 
@@ -650,7 +636,6 @@ async function guardarPerfilPublico(){
   const espec  = document.getElementById('pp-especialidad')?.value   || null;
   const marcas = document.getElementById('pp-marcas')?.value.trim()  || null;
 
-  // Generar slug si no tiene uno todavía
   let slug = vendedorData.perfil_slug;
   if(!slug && vendedorData.nombre){
     const base = vendedorData.nombre
@@ -659,7 +644,6 @@ async function guardarPerfilPublico(){
       .replace(/[^a-z0-9\s]/g, '')
       .replace(/\s+/g, '-')
       .replace(/^-+|-+$/g, '');
-    // Verificar si ya existe ese slug
     const { data: existing } = await sb.from('vendedores')
       .select('id').eq('perfil_slug', base).maybeSingle();
     if(!existing){
@@ -692,7 +676,6 @@ async function guardarPerfilPublico(){
     return;
   }
 
-  // Actualizar memoria local
   Object.assign(vendedorData, cambios);
   cerrarModal('modal-perfil-publico');
   if(perfilPublicoActivo && vendedorData.perfil_slug){
@@ -704,22 +687,13 @@ async function guardarPerfilPublico(){
 }
 
 
-
-// ── API KEY CONFIG + REGENERAR MENSAJE (temporal dev) ──
-// ══════════════════════════════════════════════════
-// SESIÓN 5 — GPT-4o Mini: REGENERAR + CONFIG KEY
-// ══════════════════════════════════════════════════
-
-// Guarda contexto del último mensaje generado para regenerar
-
-// Interceptar seleccionarSituacion para guardar contexto
+// ── API KEY CONFIG ──
 const _origSelSit = window.seleccionarSituacion;
 window.seleccionarSituacion = function(situacionId) {
   _ultimaSituacion = situacionId;
   if(_origSelSit) _origSelSit(situacionId);
 };
 
-// Interceptar generarMensajePara para guardar contexto
 const _origGenMsg = window.generarMensajePara;
 window.generarMensajePara = async function(p, situacionId) {
   _ultimoProspecto = p;
@@ -734,8 +708,6 @@ function regenerarMensaje(){
   }
   generarMensajePara(_ultimoProspecto, _ultimaSituacion);
 }
-
-// ── CONFIGURACIÓN DE API KEY (en pantalla Perfil) ──
 
 function renderApiKeySection(){
   const container = document.getElementById('perfil-api-section');
@@ -784,7 +756,6 @@ function guardarApiKey(){
     return;
   }
   localStorage.setItem('cmx_groq_key', key);
-  // Actualizar variable global en runtime
   window.GROQ_KEY = key;
   showToast('✅ API Key guardada — IA activada');
   renderApiKeySection();
@@ -815,13 +786,11 @@ async function probarIA(){
   btn.disabled = false;
 }
 
-// Al iniciar app: cargar key guardada en localStorage al OPENAI_KEY global
 (function iniciarKey(){
   const saved = localStorage.getItem('cmx_groq_key');
   if(saved) window.OPENAI_KEY = saved;
 })();
 
-// Render API section cuando se abre Perfil
 const _origGoTo2 = window.goTo;
 window.goTo = function(screen, btn){
   _origGoTo2(screen, btn);
@@ -829,15 +798,11 @@ window.goTo = function(screen, btn){
 };
 
 
-
-
 // ═══════════════════════════════════════════════════════════
-// FLUJO DE RESEÑAS — Sesión 9
-// El vendedor genera un link y lo manda al cliente por WA
+// FLUJO DE RESEÑAS
 // ═══════════════════════════════════════════════════════════
 
 async function pedirResena(prospecto){
-  // Verificar que el prospecto tiene token de reseña (se genera al marcar como ganado)
   if(!prospecto?.token_resena){
     showToast('⚠️ El link se genera al marcar la venta como Ganada');
     return;
@@ -850,12 +815,10 @@ async function pedirResena(prospecto){
   const nombre = prospecto?.nombre || 'cliente';
   const auto = prospecto?.auto_interes || '';
 
-  // Mensaje pre-armado para WhatsApp
   const msg = auto
     ? `Hola ${nombre}, fue un placer atenderte con el ${auto}. 🚗\n\nSi tuvieras 1 minuto, me ayudaría mucho que dejaras tu opinión aquí:\n${linkResena}\n\nGracias 🙏`
     : `Hola ${nombre}, fue un placer atenderte. 🤝\n\nSi tuvieras 1 minuto, me ayudaría mucho que dejaras tu opinión aquí:\n${linkResena}\n\nGracias 🙏`;
 
-  // Copiar al portapapeles
   try {
     await navigator.clipboard.writeText(msg);
     showToast('✅ Mensaje copiado — pégalo en WhatsApp');
@@ -863,7 +826,6 @@ async function pedirResena(prospecto){
     showToast('Link: ' + linkResena);
   }
 
-  // Registrar que se pidió reseña
   if(prospecto?.id){
     await sb.from('prospectos').update({ 
       notas: (prospecto.notas || '') + '\n[Reseña solicitada: ' + new Date().toLocaleDateString('es-MX') + ']'
@@ -871,7 +833,6 @@ async function pedirResena(prospecto){
   }
 }
 
-// ── Copiar solo el link de reseña (sin mensaje) ──
 async function copiarLinkResena(){
   const token = vendedorData?.token_resenas;
   if(!token){ showToast('Perfil no configurado'); return; }
@@ -884,9 +845,7 @@ async function copiarLinkResena(){
   }
 }
 
-// ── Mostrar modal de pedir reseña ──
 function mostrarModalResena(prospecto){
-  // El token se genera cuando el prospecto se marca como Ganado
   if(!prospecto?.token_resena){
     showToast('⚠️ El link de reseña se activa al marcar la venta como Ganada');
     return;
@@ -903,7 +862,6 @@ function mostrarModalResena(prospecto){
     ? `Hola ${nombre}, fue un placer atenderte con el ${auto}. 🚗\n\nSi tuvieras 1 minuto, me ayudaría mucho que dejaras tu opinión aquí:\n${linkResena}\n\nGracias 🙏`
     : `Hola ${nombre}, fue un placer atenderte. 🤝\n\nSi tuvieras 1 minuto, me ayudaría mucho que dejaras tu opinión aquí:\n${linkResena}\n\nGracias 🙏`;
 
-  // Crear modal sencillo
   const overlay = document.createElement('div');
   overlay.style.cssText = 'position:fixed;inset:0;background:#00000099;z-index:800;display:flex;align-items:flex-end;justify-content:center;';
   overlay.innerHTML = `
@@ -928,7 +886,6 @@ function mostrarModalResena(prospecto){
   document.body.appendChild(overlay);
 }
 
-// ── Copiar URL del perfil público ──
 function copiarUrlPerfil(){
   const slug = vendedorData?.perfil_slug;
   if(!slug){ showToast('Primero guarda tu perfil público'); return; }
@@ -937,36 +894,29 @@ function copiarUrlPerfil(){
     .then(() => showToast('✅ URL copiada — ' + url))
     .catch(() => showToast('Tu URL: cierralo.mx/' + slug));
 }
+
 // ═══════════════════════════════════════════════════════════
-// MOTOR DE ALERTAS INTELIGENTE — Sesión 9
-// Alertas en tiempo real cuando la app está abierta
-// Push real desde servidor cuando está cerrada
+// MOTOR DE ALERTAS INTELIGENTE
 // ═══════════════════════════════════════════════════════════
 
 const PUSH_STORAGE_KEY = 'cierralo_push_config';
 const PUSH_SUB_KEY     = 'cierralo_push_sub';
 
-// ── Tipos de alerta con prioridad ──
 const ALERTAS_CONFIG = [
-  // CRÍTICAS — notificar de inmediato
   { tipo: 'cierre_hoy',     prioridad: 1, icono: '🔥', titulo: '¡Cierra hoy!',
     condicion: p => p.etapa === 'tramite' && diasSin(p) >= 1 },
   { tipo: 'caliente_frio',  prioridad: 1, icono: '❄️', titulo: 'Prospecto enfriándose',
     condicion: p => calcTemp(p) >= 70 && diasSin(p) >= 3 },
   { tipo: 'cotizacion_vence', prioridad: 1, icono: '📋', titulo: 'Cotización venciendo',
     condicion: p => p.etapa === 'cotizacion' && diasSin(p) >= 4 },
-
-  // IMPORTANTES — notificar en bloques
   { tipo: 'sin_contacto_5', prioridad: 2, icono: '⚡', titulo: 'Sin contacto 5+ días',
     condicion: p => diasSin(p) >= 5 && !['ganado','perdido'].includes(p.etapa) },
   { tipo: 'prueba_pendiente', prioridad: 2, icono: '🚗', titulo: 'Prueba de manejo pendiente',
     condicion: p => p.etapa === 'prueba' && diasSin(p) >= 2 },
   { tipo: 'nuevo_sin_contacto', prioridad: 2, icono: '👋', titulo: 'Nuevo sin contactar',
     condicion: p => p.etapa === 'nuevo' && diasSin(p) >= 1 },
-
-  // INFORMATIVAS — resumen diario
   { tipo: 'stock_viejo',    prioridad: 3, icono: '📦', titulo: 'Auto mucho tiempo en stock',
-    condicion: p => false }, // manejado por autos, no prospectos
+    condicion: p => false },
   { tipo: 'resena_pendiente', prioridad: 3, icono: '⭐', titulo: 'Pide reseña',
     condicion: p => p.etapa === 'ganado' && p.token_resena && !p.token_resena_usado },
 ];
@@ -976,7 +926,6 @@ function diasSin(p){
   return Math.floor((Date.now() - new Date(p.ultimo_contacto)) / 86400000);
 }
 
-// ── Generar alertas actuales ordenadas por prioridad ──
 function generarAlertasMotor(){
   const alertas = [];
   const lista = window.prospectos || [];
@@ -1000,7 +949,6 @@ function generarAlertasMotor(){
     });
   });
 
-  // Alertas de autos viejos en stock
   (window.autos || []).forEach(a => {
     if(a.estado === 'disponible' && (a.dias_en_stock || 0) >= 21){
       alertas.push({
@@ -1012,7 +960,6 @@ function generarAlertasMotor(){
     }
   });
 
-  // Ordenar: primero prioridad 1, luego 2, luego 3
   return alertas.sort((a,b) => a.prioridad - b.prioridad);
 }
 
@@ -1030,29 +977,23 @@ function generarMsgAlerta(tipo, p){
   return msgs[tipo] || `Requiere atención — ${d} días sin actividad.`;
 }
 
-// ── ALERTAS EN TIEMPO REAL dentro de la app ──
-// Se ejecuta cada vez que el vendedor abre la app o cambia de pantalla
 let _motorInterval = null;
 
 function iniciarMotorAlertas(){
-  // Revisar inmediatamente al abrir
   revisarAlertasTiempoReal();
   actualizarBadgeAlertas();
 
-  // Y cada 5 minutos mientras la app esté abierta
   if(_motorInterval) clearInterval(_motorInterval);
   _motorInterval = setInterval(() => {
     revisarAlertasTiempoReal();
     actualizarBadgeAlertas();
   }, 5 * 60 * 1000);
 
-  // También revisar cuando el usuario vuelve a la pestaña
   document.addEventListener('visibilitychange', () => {
     if(document.visibilityState === 'visible') revisarAlertasTiempoReal();
   });
 }
 
-// ── Banner de alertas activas ──
 let _ultimaAlertaMostrada = null;
 
 function revisarAlertasTiempoReal(){
@@ -1063,7 +1004,6 @@ function revisarAlertasTiempoReal(){
 
   if(criticas.length === 0) return;
 
-  // No molestar con la misma alerta más de 1 vez por hora
   const ahora = Date.now();
   const clave = criticas[0].tipo + '-' + criticas[0].nombre;
   if(_ultimaAlertaMostrada === clave) return;
@@ -1078,7 +1018,6 @@ function revisarAlertasTiempoReal(){
 }
 
 function mostrarBannerAlerta(alerta, totalCriticas){
-  // Remover banner anterior si existe
   const anterior = document.getElementById('banner-alerta-motor');
   if(anterior) anterior.remove();
 
@@ -1104,7 +1043,6 @@ function mostrarBannerAlerta(alerta, totalCriticas){
     </div>
   `;
 
-  // Tap en el banner → abrir panel de alertas completo
   banner.addEventListener('click', () => {
     banner.remove();
     if(alerta.prospecto) abrirProspecto(alerta.prospecto);
@@ -1112,12 +1050,9 @@ function mostrarBannerAlerta(alerta, totalCriticas){
   });
 
   document.body.appendChild(banner);
-
-  // Auto-cerrar después de 8 segundos
   setTimeout(() => { if(banner.parentNode) banner.remove(); }, 8000);
 }
 
-// ── Panel completo de alertas ──
 function mostrarPanelAlertas(){
   const alertas = generarAlertasMotor();
 
@@ -1174,7 +1109,6 @@ function mostrarPanelAlertas(){
   document.body.appendChild(overlay);
 }
 
-// ── PUSH REAL — Solicitar permiso y suscripción ──
 async function activarNotificaciones(){
   if(!('Notification' in window)){
     showToast('Tu navegador no soporta notificaciones'); return false;
@@ -1210,7 +1144,6 @@ function getPushConfig(){
   } catch(e){ return { activo: false }; }
 }
 
-// ── Notificación local cuando la app está abierta ──
 async function enviarNotificacionLocal(titulo, cuerpo, tag){
   const permiso = Notification.permission;
   if(permiso !== 'granted') return;
@@ -1220,7 +1153,6 @@ async function enviarNotificacionLocal(titulo, cuerpo, tag){
   } catch(e){}
 }
 
-// ── Notificación de prueba ──
 async function probarNotificacion(){
   if(Notification.permission !== 'granted'){
     showToast('Primero activa las notificaciones'); return;
@@ -1236,14 +1168,12 @@ async function probarNotificacion(){
   showToast('Notificación de prueba enviada');
 }
 
-// ── Renderizar sección de notificaciones en Perfil ──
 function renderSeccionNotificaciones(){
   const container = document.getElementById('push-notif-section');
   if(!container) return;
 
   const config   = getPushConfig();
   const permiso  = 'Notification' in window ? Notification.permission : 'no-soportado';
-  const soportado = 'serviceWorker' in navigator && 'Notification' in window;
   const activo   = config.activo && permiso === 'granted';
 
   container.innerHTML = `
@@ -1285,16 +1215,12 @@ function renderSeccionNotificaciones(){
   `;
 }
 
-// Alias para compatibilidad con dashboard.js
 function generarAlertasParaPush(){ return generarAlertasMotor(); }
 
-
-// ── Badge contador de alertas en navbar ──
 function actualizarBadgeAlertas(){
   const alertas = generarAlertasMotor();
   const criticas = alertas.filter(a => a.prioridad <= 2).length;
   
-  // Badge en el botón de Dashboard/Inicio
   let badge = document.getElementById('badge-alertas-nav');
   const navBtn = document.querySelector('.nav-btn[data-screen="dashboard"]') || 
                  document.querySelector('.nav-item:first-child');
@@ -1321,10 +1247,7 @@ function actualizarBadgeAlertas(){
   if(badge) badge.textContent = criticas > 9 ? '9+' : criticas;
 }
 
-// ── Inicializar motor al cargar ──
 (function initMotorAlertas(){
-  // Arrancar motor de alertas en tiempo real cuando los datos estén listos
-  // Se llama también desde populateApp() después de cargar prospectos
   if(typeof window !== 'undefined'){
     window.addEventListener('cierralo:datosListos', () => {
       iniciarMotorAlertas();
@@ -1334,22 +1257,18 @@ function actualizarBadgeAlertas(){
 
 
 // ═══════════════════════════════════════════════════════════════
-// SISTEMA DE PLANES — Sesión 10
+// SISTEMA DE PLANES
 // ═══════════════════════════════════════════════════════════════
 
-// ── Estado global de planes ──
 window.planActual = window.planActual || 'gratis';
 window.lugaresEliteRestantes = 100;
 
-// ── Cargar plan del vendedor al iniciar ──
 async function cargarPlanVendedor() {
-  // Valores por defecto seguros
   window.planActual = window.planActual || 'gratis';
   window.lugaresEliteRestantes = window.lugaresEliteRestantes ?? 100;
   window.esPrecioLanzamiento = window.esPrecioLanzamiento || false;
 
   try {
-    // Cargar plan del vendedor
     if (currentUser && currentUser.id) {
       const { data: v, error: ev } = await sb.from('vendedores')
         .select('plan, plan_fundador')
@@ -1362,7 +1281,6 @@ async function cargarPlanVendedor() {
       }
     }
 
-    // Cargar contador Elite de config_planes
     const { data: configs, error: ec } = await sb.from('config_planes').select('clave, valor');
     if (ec) console.warn('cargarPlanVendedor config error:', ec.message);
     if (configs && configs.length > 0) {
@@ -1375,7 +1293,6 @@ async function cargarPlanVendedor() {
   }
 }
 
-// ── Verificar límite de prospectos (llamar antes de agregar) ──
 async function verificarLimiteProspectos() {
   if (window.planActual !== 'gratis') return { puede: true };
 
@@ -1393,20 +1310,17 @@ async function verificarLimiteProspectos() {
   return { puede: true, usados, limite, restantes };
 }
 
-// ── Mostrar advertencia suave (prospectos 20-24) ──
 function mostrarAdvertenciaLimite(usados, limite) {
   const restantes = limite - usados;
   showToast(`⚠️ Te quedan ${restantes} prospectos gratuitos`, 4000);
 }
 
-// ── Mostrar pantalla de planes ──
 async function mostrarPantallaPlanesUpgrade(motivo) {
   await cargarPlanVendedor();
 
   const lugares = window.lugaresEliteRestantes;
   const hayLanzamiento = lugares > 0;
   const precioElite = hayLanzamiento ? '$349' : '$499';
-  const precioEliteNum = hayLanzamiento ? 349 : 499;
   const etiquetaElite = hayLanzamiento
     ? `<div class="plan-badge-launch">🔥 Precio fundador · Solo ${lugares} lugares</div>`
     : '';
@@ -1425,8 +1339,6 @@ async function mostrarPantallaPlanesUpgrade(motivo) {
   <div class="modal-overlay" id="modal-planes" style="background:#00000066;" onclick="if(event.target===this)cerrarModalPlanes()">
     <div class="modal-sheet" style="max-height:92vh;overflow-y:auto;" id="sheet-planes">
       <div class="swipe-handle"></div>
-
-      <!-- Header con X para cerrar -->
       <div style="display:flex;justify-content:flex-end;padding:12px 16px 0;">
         <button onclick="cerrarModalPlanes()" style="background:var(--s3);border:none;border-radius:50%;
           width:30px;height:30px;font-size:16px;color:var(--text2);cursor:pointer;
@@ -1443,7 +1355,6 @@ async function mostrarPantallaPlanesUpgrade(motivo) {
         </div>
       </div>
 
-      <!-- PLAN GRATIS -->
       <div style="margin:12px 16px 8px;background:var(--s2);border:1px solid var(--border);
         border-radius:16px;padding:14px 16px;">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
@@ -1464,7 +1375,6 @@ async function mostrarPantallaPlanesUpgrade(motivo) {
         </div>
       </div>
 
-      <!-- PLAN PRO -->
       <div style="margin:0 16px 8px;background:linear-gradient(135deg,#FF6B3510,var(--s1));
         border:2px solid #FF6B3545;border-radius:16px;padding:14px 16px;">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
@@ -1496,16 +1406,11 @@ async function mostrarPantallaPlanesUpgrade(motivo) {
         </button>
       </div>
 
-      <!-- PLAN ELITE -->
       <div style="margin:0 16px 16px;background:linear-gradient(135deg,#F59E0B18,#A855F712,var(--s1));
         border:2px solid #F59E0B60;border-radius:16px;padding:14px 16px;position:relative;overflow:hidden;">
-
-        <!-- Brillo decorativo -->
         <div style="position:absolute;top:-20px;right:-20px;width:80px;height:80px;
           background:radial-gradient(circle,#F59E0B20,transparent);border-radius:50%;"></div>
-
         ${etiquetaElite}
-
         <div style="display:flex;justify-content:space-between;align-items:center;margin:8px 0 10px;">
           <div>
             <div style="font-family:'Syne',sans-serif;font-size:16px;font-weight:800;
@@ -1522,7 +1427,6 @@ async function mostrarPantallaPlanesUpgrade(motivo) {
             <div style="font-size:10px;color:var(--text3);">MXN/mes</div>
           </div>
         </div>
-
         <div style="display:flex;flex-direction:column;gap:5px;margin-bottom:12px;">
           ${featureLine('Todo lo de Pro', true, 'yellow')}
           ${featureLine('Semáforo WhatsApp Business', true, 'yellow')}
@@ -1531,14 +1435,12 @@ async function mostrarPantallaPlanesUpgrade(motivo) {
           ${featureLine('Estadísticas para tu gerente', true, 'yellow')}
           ${featureLine('Soporte por WhatsApp directo', true, 'yellow')}
         </div>
-
         <button onclick="iniciarPago('elite')"
           style="width:100%;background:linear-gradient(90deg,#F59E0B,#FF8C00);color:white;
           border:none;border-radius:10px;padding:13px;font-family:'Syne',sans-serif;
           font-weight:800;font-size:13px;cursor:pointer;letter-spacing:.3px;">
           ⭐ Quiero ser Elite — ${precioElite}/mes
         </button>
-
         ${hayLanzamiento
           ? `<div style="text-align:center;font-size:10px;color:var(--text3);margin-top:8px;">
               Precio sube a $499 cuando se agoten los ${lugares} lugares restantes
@@ -1557,7 +1459,6 @@ async function mostrarPantallaPlanesUpgrade(motivo) {
     </div>
   </div>`;
 
-  // Limpiar modal anterior si existe
   const anterior = document.getElementById('modal-planes');
   if (anterior) anterior.remove();
 
@@ -1585,7 +1486,6 @@ function cerrarModalPlanes() {
   if(m) m.remove();
 }
 
-// ── Iniciar flujo de pago ──
 async function iniciarPago(plan) {
   cerrarModalPlanes();
 
@@ -1599,7 +1499,6 @@ async function iniciarPago(plan) {
         <div style="font-size:12px;color:var(--text2);margin-bottom:16px;">
           Plan ${plan === 'pro' ? 'Pro $199' : 'Elite ' + (window.lugaresEliteRestantes > 0 ? '$349' : '$499')} / mes
         </div>
-
         <div onclick="event.stopPropagation();procesarPago('${plan}','card')"
           style="background:var(--s2);border:1px solid var(--border);border-radius:12px;
           padding:14px 16px;margin-bottom:8px;cursor:pointer;display:flex;align-items:center;gap:12px;">
@@ -1609,7 +1508,6 @@ async function iniciarPago(plan) {
             <div style="font-size:11px;color:var(--text2);">Visa, Mastercard, Amex · Activación inmediata</div>
           </div>
         </div>
-
         <div onclick="event.stopPropagation();procesarPago('${plan}','oxxo')"
           style="background:var(--s2);border:1px solid var(--border);border-radius:12px;
           padding:14px 16px;margin-bottom:8px;cursor:pointer;display:flex;align-items:center;gap:12px;">
@@ -1619,7 +1517,6 @@ async function iniciarPago(plan) {
             <div style="font-size:11px;color:var(--text2);">Paga en efectivo · Activa en 24 hrs</div>
           </div>
         </div>
-
         <div onclick="event.stopPropagation();procesarPago('${plan}','transfer')"
           style="background:var(--s2);border:1px solid var(--border);border-radius:12px;
           padding:14px 16px;cursor:pointer;display:flex;align-items:center;gap:12px;">
@@ -1633,9 +1530,7 @@ async function iniciarPago(plan) {
     </div>
   </div>`;
 
-  // Cerrar confirm-overlay antes de abrir modal de pago
   document.querySelectorAll('.confirm-overlay').forEach(m => m.classList.remove('open'));
-
   document.body.insertAdjacentHTML('beforeend', metodos);
   requestAnimationFrame(() => {
     const overlay = document.getElementById('modal-metodo');
@@ -1643,7 +1538,6 @@ async function iniciarPago(plan) {
   });
 }
 
-// ── Procesar pago ──
 async function procesarPago(plan, metodo) {
   const modal = document.getElementById('modal-metodo');
   if(modal) modal.remove();
@@ -1651,8 +1545,6 @@ async function procesarPago(plan, metodo) {
   showToast('⏳ Creando orden de pago...', 3000);
 
   try {
-    // Usar token de memoria primero (sobrevive a SIGNED_OUT automáticos de Supabase)
-    // Fallback a localStorage si la página se recargó
     let token = window._authToken;
     if(!token){
       try {
@@ -1665,8 +1557,6 @@ async function procesarPago(plan, metodo) {
       showToast('❌ Sesión expirada. Cierra y vuelve a abrir la app.', 4000);
       return;
     }
-
-    console.log('procesarPago: token OK, plan:', plan, 'metodo:', metodo);
 
     const res = await fetch('https://nkjradximipkrzscgvhv.supabase.co/functions/v1/crear-orden-pago', {
       method: 'POST',
@@ -1684,7 +1574,6 @@ async function procesarPago(plan, metodo) {
       return;
     }
 
-    // Mostrar confirmación según método
     mostrarConfirmacionPago(plan, metodo, data);
 
   } catch(e) {
@@ -1692,7 +1581,6 @@ async function procesarPago(plan, metodo) {
   }
 }
 
-// ── Mostrar confirmación post-pago ──
 function mostrarConfirmacionPago(plan, metodo, data) {
   let contenido = '';
 
@@ -1700,22 +1588,15 @@ function mostrarConfirmacionPago(plan, metodo, data) {
     contenido = `
       <div style="text-align:center;margin-bottom:16px;">
         <div style="font-size:48px;margin-bottom:8px;">🏪</div>
-        <div style="font-family:'Syne',sans-serif;font-size:18px;font-weight:800;color:var(--text);">
-          Paga en OXXO
-        </div>
-        <div style="font-size:12px;color:var(--text2);margin-top:4px;">
-          Tienes 72 horas para realizar el pago
-        </div>
+        <div style="font-family:'Syne',sans-serif;font-size:18px;font-weight:800;color:var(--text);">Paga en OXXO</div>
+        <div style="font-size:12px;color:var(--text2);margin-top:4px;">Tienes 72 horas para realizar el pago</div>
       </div>
       <div style="background:var(--s2);border:2px dashed var(--border2);border-radius:12px;
         padding:16px;text-align:center;margin-bottom:16px;">
-        <div style="font-size:10px;color:var(--text3);text-transform:uppercase;
-          letter-spacing:.5px;margin-bottom:6px;">Referencia de pago</div>
-        <div style="font-family:'Syne',sans-serif;font-size:16px;font-weight:800;
-          color:var(--orange);letter-spacing:1px;word-break:break-all;">${data.oxxo_ref}</div>
+        <div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;">Referencia de pago</div>
+        <div style="font-family:'Syne',sans-serif;font-size:16px;font-weight:800;color:var(--orange);letter-spacing:1px;word-break:break-all;">${data.oxxo_ref}</div>
         <button onclick="navigator.clipboard.writeText('${data.oxxo_ref}').then(()=>showToast('✓ Copiado',2000))"
-          style="margin-top:8px;background:var(--s3);border:1px solid var(--border);
-          border-radius:8px;padding:6px 14px;font-size:11px;color:var(--text2);cursor:pointer;">
+          style="margin-top:8px;background:var(--s3);border:1px solid var(--border);border-radius:8px;padding:6px 14px;font-size:11px;color:var(--text2);cursor:pointer;">
           📋 Copiar referencia
         </button>
       </div>
@@ -1727,19 +1608,14 @@ function mostrarConfirmacionPago(plan, metodo, data) {
     contenido = `
       <div style="text-align:center;margin-bottom:16px;">
         <div style="font-size:48px;margin-bottom:8px;">🏦</div>
-        <div style="font-family:'Syne',sans-serif;font-size:18px;font-weight:800;color:var(--text);">
-          Transferencia SPEI
-        </div>
+        <div style="font-family:'Syne',sans-serif;font-size:18px;font-weight:800;color:var(--text);">Transferencia SPEI</div>
       </div>
       <div style="background:var(--s2);border:2px dashed var(--border2);border-radius:12px;
         padding:16px;text-align:center;margin-bottom:16px;">
-        <div style="font-size:10px;color:var(--text3);text-transform:uppercase;
-          letter-spacing:.5px;margin-bottom:6px;">CLABE interbancaria</div>
-        <div style="font-family:'Syne',sans-serif;font-size:18px;font-weight:800;
-          color:var(--blue);letter-spacing:1px;">${data.spei_clabe}</div>
+        <div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;">CLABE interbancaria</div>
+        <div style="font-family:'Syne',sans-serif;font-size:18px;font-weight:800;color:var(--blue);letter-spacing:1px;">${data.spei_clabe}</div>
         <button onclick="navigator.clipboard.writeText('${data.spei_clabe}').then(()=>showToast('✓ Copiado',2000))"
-          style="margin-top:8px;background:var(--s3);border:1px solid var(--border);
-          border-radius:8px;padding:6px 14px;font-size:11px;color:var(--text2);cursor:pointer;">
+          style="margin-top:8px;background:var(--s3);border:1px solid var(--border);border-radius:8px;padding:6px 14px;font-size:11px;color:var(--text2);cursor:pointer;">
           📋 Copiar CLABE
         </button>
       </div>
@@ -1748,43 +1624,28 @@ function mostrarConfirmacionPago(plan, metodo, data) {
         Concepto: ${data.descripcion}
       </div>`;
   } else if(metodo === 'card' && data.checkout_url) {
-    // Tarjeta en produccion — redirigir a checkout de Conekta
     contenido = `
       <div style="text-align:center;">
         <div style="font-size:48px;margin-bottom:12px;">💳</div>
-        <div style="font-family:'Syne',sans-serif;font-size:18px;font-weight:800;color:var(--text);margin-bottom:6px;">
-          Pago con tarjeta
-        </div>
-        <div style="font-size:12px;color:var(--text2);margin-bottom:16px;">
-          Serás redirigido a la página segura de pago. Tu plan se activa automáticamente al confirmar.
-        </div>
-        <button onclick="window.open('${data.checkout_url}','_blank')"
-          class="btn btn-p" style="font-size:13px;margin-bottom:10px;">
+        <div style="font-family:'Syne',sans-serif;font-size:18px;font-weight:800;color:var(--text);margin-bottom:6px;">Pago con tarjeta</div>
+        <div style="font-size:12px;color:var(--text2);margin-bottom:16px;">Serás redirigido a la página segura de pago.</div>
+        <button onclick="window.open('${data.checkout_url}','_blank')" class="btn btn-p" style="font-size:13px;margin-bottom:10px;">
           💳 Ir a pagar con tarjeta →
         </button>
-        <div style="font-size:11px;color:var(--text3);">
-          Monto: <strong style="color:var(--text);">$${data.monto/100} MXN</strong> · Pago seguro vía Conekta
-        </div>
+        <div style="font-size:11px;color:var(--text3);">Monto: <strong style="color:var(--text);">$${data.monto/100} MXN</strong> · Pago seguro vía Conekta</div>
       </div>`;
   } else {
-    // Sandbox — plan activado directo
     contenido = `
       <div style="text-align:center;">
         <div style="font-size:56px;margin-bottom:12px;">🎉</div>
-        <div style="font-family:'Syne',sans-serif;font-size:20px;font-weight:800;color:var(--green);margin-bottom:6px;">
-          ¡Plan activado!
-        </div>
-        <div style="font-size:13px;color:var(--text2);margin-bottom:16px;">
-          ${data.descripcion || 'Tu plan ha sido activado correctamente.'}
-        </div>
+        <div style="font-family:'Syne',sans-serif;font-size:20px;font-weight:800;color:var(--green);margin-bottom:6px;">¡Plan activado!</div>
+        <div style="font-size:13px;color:var(--text2);margin-bottom:16px;">${data.descripcion || 'Tu plan ha sido activado correctamente.'}</div>
         ${data.precio_lanzamiento
-          ? `<div style="background:var(--yellowBg);border:1px solid #F59E0B40;border-radius:10px;
-              padding:10px;font-size:12px;color:var(--yellow);margin-bottom:16px;">
+          ? `<div style="background:var(--yellowBg);border:1px solid #F59E0B40;border-radius:10px;padding:10px;font-size:12px;color:var(--yellow);margin-bottom:16px;">
               🔥 Quedaste registrado como Vendedor Fundador #${100 - window.lugaresEliteRestantes + 1}
             </div>`
           : ''}
-        <button onclick="document.getElementById('modal-pago-resultado')?.remove();location.reload()"
-          class="btn btn-g" style="font-size:13px;">
+        <button onclick="document.getElementById('modal-pago-resultado')?.remove();location.reload()" class="btn btn-g" style="font-size:13px;">
           ✓ Ver mi nuevo plan
         </button>
       </div>`;
@@ -1797,8 +1658,7 @@ function mostrarConfirmacionPago(plan, metodo, data) {
       <div style="position:relative;padding:20px 18px 24px;">
         <button onclick="document.getElementById('modal-pago-resultado')?.remove()"
           style="position:absolute;top:0;right:4px;background:none;border:none;
-          font-size:22px;color:var(--text3);cursor:pointer;padding:4px 8px;
-          line-height:1;z-index:10;">✕</button>
+          font-size:22px;color:var(--text3);cursor:pointer;padding:4px 8px;line-height:1;z-index:10;">✕</button>
         ${contenido}
       </div>
     </div>
@@ -1811,24 +1671,18 @@ function mostrarConfirmacionPago(plan, metodo, data) {
   });
 }
 
-// ── CSS extra para planes ──
 const styleEl = document.createElement('style');
 styleEl.textContent = `
 .plan-badge-launch {
   display:inline-block;
   background:linear-gradient(90deg,#F59E0B,#FF6B35);
-  color:white;
-  font-size:10px;
-  font-weight:700;
-  padding:4px 10px;
-  border-radius:20px;
-  margin-bottom:8px;
-  letter-spacing:.3px;
+  color:white;font-size:10px;font-weight:700;
+  padding:4px 10px;border-radius:20px;
+  margin-bottom:8px;letter-spacing:.3px;
 }
 `;
 document.head.appendChild(styleEl);
 
-// ── Actualizar card de plan en Perfil ──
 async function actualizarCardPlan() {
   if(!currentUser || !currentUser.id) return;
   const cardNombre = document.getElementById('plan-nombre-badge');
@@ -1846,7 +1700,6 @@ async function actualizarCardPlan() {
   cardNombre.style.color   = colores[plan] || 'var(--text2)';
 
   if(plan === 'gratis') {
-    // Mostrar barra de uso de prospectos
     const { count } = await sb.from('prospectos')
       .select('id', { count: 'exact', head: true })
       .eq('vendedor_id', currentUser.id)
@@ -1860,8 +1713,7 @@ async function actualizarCardPlan() {
     if(cardBarra) cardBarra.innerHTML = `
       <div style="display:flex;align-items:center;gap:8px;">
         <div style="flex:1;height:5px;background:var(--s3);border-radius:3px;overflow:hidden;">
-          <div style="height:100%;width:${pct}%;background:${color};border-radius:3px;
-            transition:width .4s;"></div>
+          <div style="height:100%;width:${pct}%;background:${color};border-radius:3px;transition:width .4s;"></div>
         </div>
         <div style="font-size:10px;color:${color};font-weight:700;flex-shrink:0;">${pct}%</div>
       </div>`;
