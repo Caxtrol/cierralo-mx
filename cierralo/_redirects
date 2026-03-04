@@ -11,6 +11,9 @@
 /css/*              /css/:splat         200
 /js/*               /js/:splat          200
 
+# Raíz — siempre index.html (incluye regreso de OAuth de Google)
+/                   /index.html         200
+
 # Links de reseña: cierralo.mx/resena/TOKEN
 /resena/:token      /resena.html        200
 
