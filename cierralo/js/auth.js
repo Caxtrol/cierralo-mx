@@ -19,32 +19,11 @@ window.addEventListener('load', async () => {
   }, 5000);
 
   // ── Detectar regreso de Google OAuth ──
-  // PKCE manda ?code= en el query string — Supabase lo intercambia automáticamente
-  // con detectSessionInUrl: true en config.js
-  // Solo necesitamos limpiar la URL y dejar que onAuthStateChange maneje el SIGNED_IN
-  const searchParams = new URLSearchParams(window.location.search);
-  const oauthCode = searchParams.get('code');
-  if (oauthCode) {
-    console.log('[Auth] Código OAuth PKCE detectado — Supabase lo procesa automáticamente');
-    clearTimeout(fallback);
-    // Limpiar URL sin recargar (Supabase ya leyó el code)
-    window.history.replaceState(null, '', window.location.pathname);
-    // onAuthStateChange disparará SIGNED_IN cuando Supabase intercambie el code por token
-    // Damos 8 segundos para que complete el intercambio antes de mostrar login
-    window._fallbackOAuth = setTimeout(() => {
-      if (!appIniciada) {
-        document.getElementById('splash').classList.add('hidden');
-        showPage('login');
-        showToast('❌ No se pudo entrar con Google. Intenta de nuevo.');
-      }
-    }, 8000);
-    return;
-  }
-
-  // Flujo legacy: token en hash (por si acaso)
+  // Implicit flow manda #access_token= en el hash
   const hash = window.location.hash;
   if (hash && hash.includes('access_token')) {
     clearTimeout(fallback);
+    console.log('[Auth] Token OAuth detectado en hash');
     const params = new URLSearchParams(hash.substring(1));
     const accessToken  = params.get('access_token');
     const refreshToken = params.get('refresh_token');
@@ -53,8 +32,9 @@ window.addEventListener('load', async () => {
       try {
         const { error } = await sb.auth.setSession({ access_token: accessToken, refresh_token: refreshToken });
         if (error) throw error;
+        // onAuthStateChange dispara SIGNED_IN — él toma el control
       } catch (e) {
-        console.error('[Auth] Error procesando token OAuth legacy:', e);
+        console.error('[Auth] Error procesando token OAuth:', e);
         document.getElementById('splash').classList.add('hidden');
         showPage('login');
         showToast('❌ Error al entrar con Google. Intenta de nuevo.');
@@ -224,7 +204,7 @@ async function loginConGoogle() {
       redirectTo: 'https://cierralo.mx',
       skipBrowserRedirect: false,
       queryParams: { prompt: 'select_account', access_type: 'offline' },
-      flowType: 'pkce'
+
     }
   });
 
@@ -244,7 +224,7 @@ async function loginConGoogleRegistro() {
       redirectTo: 'https://cierralo.mx',
       skipBrowserRedirect: false,
       queryParams: { prompt: 'select_account', access_type: 'offline' },
-      flowType: 'pkce'
+
     }
   });
 
