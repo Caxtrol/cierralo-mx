@@ -8,28 +8,27 @@ const SUPABASE_KEY = 'sb_publishable_53Uf0nvrDI8I0iVRqgDA7g_4RJDPl3j';
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY, {
   auth: {
+    flowType:           'pkce',   // ← NUEVO: Google OAuth sin bloqueo de cookies
     persistSession:     true,
     autoRefreshToken:   true,
-    detectSessionInUrl: false,
+    detectSessionInUrl: true,     // ← CAMBIO: detecta token al regresar de Google
     storageKey:         'cierralo_session',
   }
 });
 
 // ── Cliente autenticado con token fresco ──
-// Se crea UNA SOLA VEZ y se reutiliza — sin instancias duplicadas
 let _sbAuthClient = null;
 function sbAuth() {
   const token = window._authToken;
   if (!token) return sb;
-  // Solo crear si no existe o si el token cambió
   if (!_sbAuthClient || _sbAuthClient._token !== token) {
     _sbAuthClient = createClient(SUPABASE_URL, SUPABASE_KEY, {
       global: { headers: { Authorization: 'Bearer ' + token } },
       auth: {
-        persistSession: false,
-        autoRefreshToken: false,
+        persistSession:     false,
+        autoRefreshToken:   false,
         detectSessionInUrl: false,
-        storageKey: 'cierralo_sbauth_tmp'
+        storageKey:         'cierralo_sbauth_tmp'
       }
     });
     _sbAuthClient._token = token;
@@ -149,7 +148,6 @@ function tempEmoji(t){
 
 // ── Navegación entre pantallas ──
 function goTo(screen, btn){
-  // Cerrar cualquier modal abierto al cambiar de pantalla
   document.querySelectorAll('.confirm-overlay, .modal-overlay').forEach(m => {
     m.classList.remove('open');
   });
@@ -166,7 +164,6 @@ function goTo(screen, btn){
   }
   document.getElementById('main')?.scrollTo(0, 0);
 
-  // Hooks por pantalla
   if(screen === 'mensajes'){
     setTimeout(() => { renderPantallaMensajes(); renderPendingBanner(); }, 100);
   }
@@ -229,7 +226,6 @@ function goTo(screen, btn){
 // MOTOR DE PERMISOS POR PLAN
 // ═══════════════════════════════════════════════════════════
 
-// ── Matriz de límites por plan ──
 const PLANES_LIMITES = {
   free: {
     prospectos_max:  25,
@@ -257,7 +253,6 @@ const PLANES_LIMITES = {
   }
 };
 
-// ── Textos del paywall por acción bloqueada ──
 const PAYWALL_TEXTOS = {
   prospectos_max: {
     titulo:  '📋 Límite de prospectos alcanzado',
@@ -281,34 +276,21 @@ const PAYWALL_TEXTOS = {
   }
 };
 
-// ── Obtener plan actual del vendedor ──
 function getPlanActual() {
-  if (vendedorData && vendedorData.plan) {
-    return vendedorData.plan; // 'free', 'pro', 'elite'
-  }
+  if (vendedorData && vendedorData.plan) return vendedorData.plan;
   return 'free';
 }
 
-// ── Verificar si el vendedor puede realizar una acción ──
 function puedeHacer(accion, valorActual) {
   const plan   = getPlanActual();
   const limite = PLANES_LIMITES[plan];
   if (!limite) return true;
-
   const permiso = limite[accion];
-
-  // Límite booleano
   if (typeof permiso === 'boolean') return permiso;
-
-  // Límite numérico
-  if (typeof permiso === 'number' && valorActual !== undefined) {
-    return valorActual < permiso;
-  }
-
+  if (typeof permiso === 'number' && valorActual !== undefined) return valorActual < permiso;
   return true;
 }
 
-// ── Mensajes IA restantes este mes ──
 function mensajesIARestantes() {
   const plan  = getPlanActual();
   const max   = PLANES_LIMITES[plan].mensajes_ia_mes;
@@ -316,49 +298,29 @@ function mensajesIARestantes() {
   return Math.max(0, max - usado);
 }
 
-// ── Verificar límite de prospectos antes de guardar uno nuevo ──
-// Retorna { puede: true/false, usados: N, limite: N, advertencia: true/false }
 function verificarLimiteProspectos() {
   const plan   = getPlanActual();
   const limite = PLANES_LIMITES[plan].prospectos_max;
-
-  // Pro y Elite no tienen límite — siempre puede
   if (limite === Infinity) return { puede: true, usados: prospectos.length, limite: Infinity, advertencia: false };
-
   const activos = prospectos.filter(p => p.etapa !== 'perdido').length;
-
   if (activos >= limite) {
-    // Llegó al tope — mostrar paywall
     mostrarPaywall('prospectos_max');
     return { puede: false, usados: activos, limite, advertencia: false };
   }
-
-  // Advertencia cuando le faltan 3 o menos
-  const advertencia = activos >= limite - 3;
-  return { puede: true, usados: activos, limite, advertencia };
+  return { puede: true, usados: activos, limite, advertencia: activos >= limite - 3 };
 }
 
-// ── Registrar uso de mensaje IA (suma 1 al contador mensual) ──
-// Se llama después de que la IA genera un mensaje exitosamente
 async function registrarMensajeIA() {
   if (!vendedorData) return;
-
   const uid = currentUser?.id || window._currentUid;
   if (!uid) return;
-
-  // Sumar 1 al contador en memoria
   vendedorData.mensajes_ia_mes_usado = (vendedorData.mensajes_ia_mes_usado || 0) + 1;
-
-  // Persistir en Supabase en segundo plano (no bloquea la UI)
   sbAuth().from('vendedores')
     .update({ mensajes_ia_mes_usado: vendedorData.mensajes_ia_mes_usado })
     .eq('id', uid)
-    .then(({ error }) => {
-      if (error) console.warn('No se pudo guardar contador IA:', error.message);
-    });
+    .then(({ error }) => { if (error) console.warn('No se pudo guardar contador IA:', error.message); });
 }
 
-// ── Modal de paywall ──
 function mostrarPaywall(accion) {
   const info = PAYWALL_TEXTOS[accion] || {
     titulo:  '⭐ Función Premium',
@@ -388,9 +350,7 @@ function mostrarPaywall(accion) {
       </div>
     `;
     document.body.appendChild(overlay);
-    overlay.addEventListener('click', e => {
-      if (e.target === overlay) cerrarPaywall();
-    });
+    overlay.addEventListener('click', e => { if (e.target === overlay) cerrarPaywall(); });
   }
 
   const partes = info.titulo.split(' ');
