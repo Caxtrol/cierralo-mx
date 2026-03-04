@@ -290,14 +290,67 @@ function abrirWrapped(){
 
 // ── IMPORTACIÓN EXCEL / CSV ──────────────────────────────────────────────────
 
-function abrirImportExcel(){
-  // ── BLOQUEO POR PLAN: Solo Pro y Elite pueden importar Excel ──
-  if(!puedeHacer('excel_import')){
-    mostrarPaywall('excel_import');
-    return;
-  }
+// ── Limpieza inteligente de datos ──
+function limpiarNombre(raw){
+  if(!raw) return '';
+  return String(raw)
+    .trim()
+    // Quitar caracteres raros pero conservar letras con acento, ñ, espacios
+    .replace(/[^\p{L}\p{M}\s\-\.]/gu, '')
+    // Colapsar espacios múltiples
+    .replace(/\s+/g, ' ')
+    .trim()
+    // Capitalizar cada palabra
+    .replace(/\b\w/g, c => c.toUpperCase());
+}
 
-  excelDataParsed = [];
+function limpiarTelefono(raw){
+  if(!raw) return '';
+  const solo = String(raw).replace(/[^0-9]/g, '');
+  // Quitar prefijo 52 si ya tiene 12 dígitos (521XXXXXXXXXX)
+  if(solo.length === 12 && solo.startsWith('52')) return solo.slice(2);
+  // Quitar 521 si tiene 13 dígitos
+  if(solo.length === 13 && solo.startsWith('521')) return solo.slice(3);
+  // Quedarse con los últimos 10 dígitos
+  return solo.slice(-10);
+}
+
+// ── Detectar columna por palabras clave (flexible) ──
+const COLUMNAS_CLAVE = {
+  nombre:  ['nombre','name','cliente','prospecto','contacto','razon','social','titular','persona'],
+  telefono:['telefono','tel','phone','celular','movil','whatsapp','numero','cel','fono','wha'],
+  auto:    ['auto','vehiculo','modelo','interes','carro','unidad','producto'],
+  notas:   ['nota','notas','comentario','observacion','obs','detalle','descripcion'],
+  email:   ['email','correo','mail','e-mail'],
+  fuente:  ['fuente','origen','canal','referido','procedencia']
+};
+
+function detectarColumnasAuto(columnasArchivo){
+  const resultado = {};
+  const usadas = new Set();
+  for(const [campo, palabras] of Object.entries(COLUMNAS_CLAVE)){
+    for(const col of columnasArchivo){
+      const colLimpia = col.toLowerCase().replace(/[^a-z0-9]/g,'');
+      const coincide  = palabras.some(p => colLimpia.includes(p));
+      if(coincide && !usadas.has(col)){
+        resultado[campo] = col;
+        usadas.add(col);
+        break;
+      }
+    }
+  }
+  return resultado;
+}
+
+// Variable para guardar columnas seleccionadas en el mapeador
+let _excelColumnas   = [];   // columnas originales del archivo
+let _excelFilasBruto = [];   // filas sin procesar
+
+function abrirImportExcel(){
+  if(!puedeHacer('excel_import')){ mostrarPaywall('excel_import'); return; }
+  excelDataParsed  = [];
+  _excelColumnas   = [];
+  _excelFilasBruto = [];
   document.getElementById('excel-paso1').style.display = 'block';
   document.getElementById('excel-paso2').style.display = 'none';
   document.getElementById('excel-paso3').style.display = 'none';
@@ -313,112 +366,207 @@ function procesarArchivoExcel(input){
   reader.onload = function(e){
     try {
       let filas = [];
+      let columnasOriginales = [];
 
-      if(file.name.endsWith('.csv')){
+      if(file.name.toLowerCase().endsWith('.csv')){
         const texto = e.target.result;
+        // Detectar separador automáticamente (coma, punto y coma, tab)
+        const primeraLinea = texto.split(/\r?\n/)[0];
+        const sep = primeraLinea.includes(';') ? ';' : primeraLinea.includes('\t') ? '\t' : ',';
         const lineas = texto.split(/\r?\n/).filter(l => l.trim());
-        const headers = lineas[0].split(',').map(h => h.trim().toLowerCase().replace(/[^a-z0-9]/g,''));
+        columnasOriginales = lineas[0].split(sep).map(h => h.trim().replace(/^"|"$/g,''));
         for(let i = 1; i < lineas.length; i++){
-          const cols = lineas[i].split(',');
+          const cols = lineas[i].split(sep);
           const obj = {};
-          headers.forEach((h, ci) => obj[h] = (cols[ci] || '').trim().replace(/^"|"$/g,''));
+          columnasOriginales.forEach((h, ci) => {
+            obj[h] = (cols[ci] || '').trim().replace(/^"|"$/g,'');
+          });
           filas.push(obj);
         }
       } else {
         const data = new Uint8Array(e.target.result);
         const wb   = XLSX.read(data, { type: 'array' });
         const ws   = wb.Sheets[wb.SheetNames[0]];
-        filas = XLSX.utils.sheet_to_json(ws, { defval: '' });
-        filas = filas.map(row => {
-          const clean = {};
-          Object.keys(row).forEach(k => {
-            clean[k.toLowerCase().trim().replace(/\s+/g,'_').replace(/[^a-z0-9_]/g,'')] = String(row[k]).trim();
-          });
-          return clean;
+        const raw  = XLSX.utils.sheet_to_json(ws, { defval: '', header: 1 });
+        if(raw.length < 2){ showToast('El archivo está vacío.'); return; }
+        columnasOriginales = raw[0].map(h => String(h).trim());
+        filas = raw.slice(1).map(row => {
+          const obj = {};
+          columnasOriginales.forEach((h, ci) => { obj[h] = String(row[ci] ?? '').trim(); });
+          return obj;
         });
       }
 
-      mostrarPreviewExcel(filas);
-    } catch(err) {
+      // Filtrar filas completamente vacías
+      filas = filas.filter(r => Object.values(r).some(v => v !== ''));
+
+      if(!filas.length || !columnasOriginales.length){
+        showToast('El archivo está vacío o no se pudo leer.'); return;
+      }
+
+      _excelFilasBruto = filas;
+      _excelColumnas   = columnasOriginales;
+
+      // Intentar mapeo automático
+      const mapaAuto = detectarColumnasAuto(columnasOriginales);
+
+      if(mapaAuto.nombre && mapaAuto.telefono){
+        // Detección exitosa — ir directo a preview
+        procesarConMapa(mapaAuto);
+      } else {
+        // Necesita que el vendedor mapee manualmente
+        mostrarMapeador(columnasOriginales, mapaAuto);
+      }
+
+    } catch(err){
       showToast('Error leyendo archivo: ' + err.message);
+      console.error(err);
     }
   };
 
-  if(file.name.endsWith('.csv')){
+  if(file.name.toLowerCase().endsWith('.csv')){
     reader.readAsText(file, 'UTF-8');
   } else {
     reader.readAsArrayBuffer(file);
   }
 }
 
-function detectarColumna(row, candidatos){
-  for(const c of candidatos){
-    if(row[c] !== undefined && row[c] !== '') return c;
-  }
-  return null;
+// ── MAPEADOR VISUAL: el vendedor elige qué columna es qué ──
+function mostrarMapeador(columnas, mapaAuto){
+  const opts = columnas.map(c => `<option value="${c}">${c}</option>`).join('');
+  const optsConVacio = `<option value="">— No usar —</option>` + opts;
+
+  const valDe = campo => mapaAuto[campo] || '';
+
+  document.getElementById('excel-preview-content').innerHTML = `
+    <div style="background:var(--blueBg);border:1px solid #4A9EFF30;border-radius:12px;padding:14px;margin-bottom:14px;">
+      <div style="font-size:13px;font-weight:700;color:var(--blue);margin-bottom:4px;">📋 Ayúdame a entender tu archivo</div>
+      <div style="font-size:11px;color:var(--text2);">Tu archivo tiene ${columnas.length} columnas. Dime cuál es cuál y la app hace el resto.</div>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:16px;">
+
+      <div style="background:var(--s2);border-radius:10px;padding:12px;">
+        <div style="font-size:10px;font-weight:700;color:var(--orange);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;">⭐ Nombre del cliente <span style="color:var(--red);">*</span></div>
+        <select id="map-nombre" style="width:100%;background:var(--s1);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:10px;font-size:13px;">
+          <option value="">— Selecciona columna —</option>${opts}
+        </select>
+      </div>
+
+      <div style="background:var(--s2);border-radius:10px;padding:12px;">
+        <div style="font-size:10px;font-weight:700;color:var(--orange);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;">⭐ Teléfono / WhatsApp <span style="color:var(--red);">*</span></div>
+        <select id="map-telefono" style="width:100%;background:var(--s1);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:10px;font-size:13px;">
+          <option value="">— Selecciona columna —</option>${opts}
+        </select>
+      </div>
+
+      <div style="background:var(--s2);border-radius:10px;padding:12px;">
+        <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;">🚗 Auto de interés (opcional)</div>
+        <select id="map-auto" style="width:100%;background:var(--s1);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:10px;font-size:13px;">
+          ${optsConVacio}
+        </select>
+      </div>
+
+      <div style="background:var(--s2);border-radius:10px;padding:12px;">
+        <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;">📝 Notas / Comentarios (opcional)</div>
+        <select id="map-notas" style="width:100%;background:var(--s1);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:10px;font-size:13px;">
+          ${optsConVacio}
+        </select>
+      </div>
+
+    </div>
+
+    <div style="font-size:11px;color:var(--text3);margin-bottom:12px;text-align:center;">
+      Vista previa de tu archivo: ${_excelFilasBruto.length} filas encontradas
+    </div>
+
+    <div style="display:flex;gap:8px;">
+      <button onclick="cerrarModal('modal-excel')" style="flex:1;background:var(--s2);color:var(--text2);border:1px solid var(--border);border-radius:10px;padding:12px;font-family:'Syne',sans-serif;font-weight:700;font-size:12px;cursor:pointer;">Cancelar</button>
+      <button onclick="confirmarMapeador()" style="flex:2;background:var(--orange);color:white;border:none;border-radius:10px;padding:12px;font-family:'Syne',sans-serif;font-weight:700;font-size:12px;cursor:pointer;">Continuar →</button>
+    </div>`;
+
+  // Pre-seleccionar si algo se detectó parcialmente
+  if(valDe('nombre'))    document.getElementById('map-nombre').value    = valDe('nombre');
+  if(valDe('telefono'))  document.getElementById('map-telefono').value  = valDe('telefono');
+  if(valDe('auto'))      document.getElementById('map-auto').value      = valDe('auto');
+  if(valDe('notas'))     document.getElementById('map-notas').value     = valDe('notas');
+
+  document.getElementById('excel-paso1').style.display = 'none';
+  document.getElementById('excel-paso2').style.display = 'block';
 }
 
-function mostrarPreviewExcel(filas){
-  if(!filas || filas.length === 0){
-    showToast('El archivo está vacío o no se pudo leer.');
+function confirmarMapeador(){
+  const nombre   = document.getElementById('map-nombre')?.value;
+  const telefono = document.getElementById('map-telefono')?.value;
+  if(!nombre || !telefono){
+    showToast('⚠️ Debes seleccionar Nombre y Teléfono para continuar');
     return;
   }
+  procesarConMapa({
+    nombre,
+    telefono,
+    auto:   document.getElementById('map-auto')?.value  || '',
+    notas:  document.getElementById('map-notas')?.value || ''
+  });
+}
 
-  const muestra = filas[0];
-  const colNombre = detectarColumna(muestra, ['nombre','name','cliente','prospecto','contacto','razon_social']);
-  const colTel    = detectarColumna(muestra, ['telefono','tel','phone','celular','movil','whatsapp','numero']);
-  const colAuto   = detectarColumna(muestra, ['auto','vehiculo','modelo','interes','auto_interes','carro']);
-  const colNotas  = detectarColumna(muestra, ['notas','nota','comentario','observaciones','obs']);
+// ── PROCESAR CON EL MAPA DEFINIDO (auto o manual) ──
+function procesarConMapa(mapa){
+  const filas = _excelFilasBruto;
 
-  if(!colNombre || !colTel){
-    document.getElementById('excel-preview-content').innerHTML = `
-      <div style="background:var(--redBg);border:1px solid #EF444430;border-radius:12px;padding:16px;text-align:center;">
-        <div style="font-size:28px;margin-bottom:8px;">⚠️</div>
-        <div style="font-size:13px;font-weight:700;color:var(--red);margin-bottom:4px;">No encontré columnas de Nombre y Teléfono</div>
-        <div style="font-size:11px;color:var(--text2);">Columnas detectadas: ${Object.keys(muestra).join(', ')}</div>
-        <div style="font-size:11px;color:var(--text3);margin-top:6px;">Asegúrate de que tu archivo tenga columnas llamadas "Nombre" y "Teléfono"</div>
-      </div>`;
-    document.getElementById('excel-paso1').style.display = 'none';
-    document.getElementById('excel-paso2').style.display = 'block';
-    return;
-  }
-
-  // Función de similitud local — por si crm.js no la tiene disponible aún
-  const _similitud = typeof similitud === 'function' ? similitud : function(a, b) {
-    if(a === b) return 1;
-    if(!a || !b) return 0;
-    const longer = a.length > b.length ? a : b;
-    const shorter = a.length > b.length ? b : a;
-    if(longer.length === 0) return 1;
-    let matches = 0;
-    for(let i = 0; i < shorter.length; i++){
-      if(longer.includes(shorter[i])) matches++;
-    }
-    return matches / longer.length;
+  // Similitud local de respaldo
+  const _sim = typeof similitud === 'function' ? similitud : function(a, b){
+    if(a === b) return 1; if(!a||!b) return 0;
+    const lg = a.length > b.length ? a : b;
+    const sh = a.length > b.length ? b : a;
+    let m = 0;
+    for(let i = 0; i < sh.length; i++) if(lg.includes(sh[i])) m++;
+    return m / lg.length;
   };
 
-  const validas = filas.filter(r => r[colNombre] && r[colTel]);
-  let nuevos = 0, duplicados = 0;
+  let nuevos = 0, duplicados = 0, sinDatos = 0;
   const procesadas = [];
 
-  validas.forEach(row => {
-    const tel = row[colTel].replace(/\D/g,'');
-    const nombre = row[colNombre].trim();
-    const existe = prospectos.some(p =>
-      (p.telefono || '').replace(/\D/g,'').includes(tel.slice(-8)) ||
-      _similitud(p.nombre.toLowerCase(), nombre.toLowerCase()) > 0.85
-    );
+  filas.forEach(row => {
+    const nombreRaw = row[mapa.nombre] || '';
+    const telRaw    = row[mapa.telefono] || '';
+
+    // Limpiar con las funciones inteligentes
+    const nombre = limpiarNombre(nombreRaw);
+    const tel    = limpiarTelefono(telRaw);
+
+    // Saltar fila si no tiene nombre ni teléfono útil
+    if(!nombre && tel.length < 8){ sinDatos++; return; }
+    // Si no tiene nombre, usar "Contacto sin nombre"
+    const nombreFinal = nombre || 'Contacto sin nombre';
+    // Si el teléfono quedó muy corto, guardar el original limpio
+    const telFinal = tel.length >= 8 ? tel : telRaw.replace(/[^0-9]/g,'').slice(-10);
+
+    const auto  = mapa.auto  ? String(row[mapa.auto]  || '').trim() : '';
+    const notas = mapa.notas ? String(row[mapa.notas] || '').trim() : '';
+
+    // Verificar duplicados
+    const existe = prospectos.some(p => {
+      const pTel = (p.telefono || '').replace(/[^0-9]/g,'');
+      return (telFinal.length >= 8 && pTel.slice(-8) === telFinal.slice(-8)) ||
+             _sim(p.nombre.toLowerCase(), nombreFinal.toLowerCase()) > 0.85;
+    });
+
     if(existe){
       duplicados++;
-      procesadas.push({ ...row, _estado: 'duplicado', _nombre: nombre, _tel: tel });
+      procesadas.push({ _estado:'duplicado', _nombre:nombreFinal, _tel:telFinal, _auto:auto, _notas:notas });
     } else {
       nuevos++;
-      procesadas.push({ ...row, _estado: 'nuevo', _nombre: nombre, _tel: tel, _auto: colAuto ? row[colAuto] : '', _notas: colNotas ? row[colNotas] : '' });
+      procesadas.push({ _estado:'nuevo', _nombre:nombreFinal, _tel:telFinal, _auto:auto, _notas:notas });
     }
   });
 
   excelDataParsed = procesadas.filter(r => r._estado === 'nuevo');
 
+  mostrarPreviewExcel(procesadas, nuevos, duplicados, sinDatos);
+}
+
+function mostrarPreviewExcel(procesadas, nuevos, duplicados, sinDatos){
   const comisionEst = nuevos * 4500;
 
   document.getElementById('excel-preview-content').innerHTML = `
@@ -434,6 +582,7 @@ function mostrarPreviewExcel(filas){
           <div style="font-size:10px;color:var(--text3);">Ya en tu CRM</div>
         </div>
       </div>
+      ${sinDatos > 0 ? `<div style="font-size:10px;color:var(--text3);text-align:center;margin-bottom:8px;">${sinDatos} fila${sinDatos!==1?'s':''} omitida${sinDatos!==1?'s':''} (sin nombre ni teléfono válido)</div>` : ''}
       <div style="background:var(--s1);border-radius:8px;padding:10px;text-align:center;">
         <div style="font-size:10px;color:var(--text3);margin-bottom:2px;">Comisión potencial estimada</div>
         <div style="font-family:'Syne',sans-serif;font-size:22px;font-weight:800;color:var(--yellow);">${fmtPeso(comisionEst)}</div>
@@ -442,16 +591,17 @@ function mostrarPreviewExcel(filas){
     </div>
 
     ${nuevos > 0 ? `
-    <div style="font-size:11px;color:var(--text2);margin-bottom:10px;">Vista previa — primeros ${Math.min(3,nuevos)} contactos:</div>
+    <div style="font-size:11px;color:var(--text2);margin-bottom:8px;">Vista previa — primeros ${Math.min(3,nuevos)} contactos (ya limpios):</div>
     ${procesadas.filter(r=>r._estado==='nuevo').slice(0,3).map(r => `
       <div style="background:var(--s2);border-radius:8px;padding:10px;margin-bottom:6px;display:flex;align-items:center;gap:10px;">
         <div style="width:32px;height:32px;border-radius:50%;background:var(--orangeBg);color:var(--orange);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:12px;flex-shrink:0;">${r._nombre.split(' ').map(n=>n[0]||'').join('').substring(0,2).toUpperCase()}</div>
         <div style="flex:1;min-width:0;">
           <div style="font-size:13px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${safe(r._nombre)}</div>
-          <div style="font-size:11px;color:var(--text3);">📱 ${r._tel}${r._auto ? ' · '+safe(r._auto) : ''}</div>
+          <div style="font-size:11px;color:var(--text3);">📱 ${r._tel || '—'}${r._auto ? ' · '+safe(r._auto) : ''}</div>
         </div>
+        <div style="font-size:18px;">✅</div>
       </div>`).join('')}
-    ` : '<div style="text-align:center;padding:16px;color:var(--text3);font-size:12px;">Todos los contactos ya están en tu CRM 👍</div>'}
+    ` : `<div style="text-align:center;padding:16px;color:var(--text3);font-size:12px;">Todos los contactos ya están en tu CRM 👍</div>`}
 
     <div style="display:flex;gap:8px;margin-top:12px;">
       <button onclick="cerrarModal('modal-excel')" style="flex:1;background:var(--s2);color:var(--text2);border:1px solid var(--border);border-radius:10px;padding:12px;font-family:'Syne',sans-serif;font-weight:700;font-size:12px;cursor:pointer;">Cancelar</button>
@@ -468,23 +618,26 @@ async function importarProspectosExcel(){
   const btn = document.querySelector('#excel-paso2 button:last-child');
   if(btn){ btn.textContent = 'Importando...'; btn.disabled = true; }
 
+  const uid = currentUser?.id || window._currentUid;
+  if(!uid){ showToast('❌ Sesión expirada'); if(btn){ btn.textContent='Importar'; btn.disabled=false; } return; }
+
   const LOTE = 10;
   let importados = 0, errores = 0;
 
   for(let i = 0; i < excelDataParsed.length; i += LOTE){
     const lote = excelDataParsed.slice(i, i + LOTE).map(r => ({
-      vendedor_id:   currentUser.id,
-      nombre:        r._nombre,
-      telefono:      '+52' + r._tel.replace(/^\+52/, '').replace(/\D/g,''),
-      auto_interes:  r._auto  || null,
-      notas:         r._notas || null,
-      etapa:         'nuevo',
-      temperatura:   0,
-      fuente:        'excel'
+      vendedor_id:  uid,
+      nombre:       r._nombre,
+      telefono:     r._tel.length >= 10 ? '+52' + r._tel.slice(-10) : (r._tel || null),
+      auto_interes: r._auto  || null,
+      notas:        r._notas || null,
+      etapa:        'nuevo',
+      temperatura:  0,
+      fuente:       'excel'
     }));
 
-    const { error } = await sb.from('prospectos').insert(lote);
-    if(error){ errores += lote.length; }
+    const { error } = await sbAuth().from('prospectos').insert(lote);
+    if(error){ console.error('Import error:', error); errores += lote.length; }
     else { importados += lote.length; }
 
     if(i + LOTE < excelDataParsed.length) await new Promise(r => setTimeout(r, 300));
@@ -496,16 +649,16 @@ async function importarProspectosExcel(){
     <div style="text-align:center;padding:8px 0 16px;">
       <div style="font-size:48px;margin-bottom:10px;">${errores === 0 ? '✅' : '⚠️'}</div>
       <div style="font-family:'Syne',sans-serif;font-weight:800;font-size:20px;color:var(--text);margin-bottom:6px;">${importados} contacto${importados!==1?'s':''} importado${importados!==1?'s':''}</div>
-      ${errores > 0 ? `<div style="font-size:12px;color:var(--red);margin-bottom:6px;">${errores} con error — revisa duplicados</div>` : ''}
-      <div style="font-size:12px;color:var(--text2);margin-bottom:16px;">Ya están en tu CRM como "Nuevo". La app los irá recordándote de a poco — máx. 10 por turno.</div>
+      ${errores > 0 ? `<div style="font-size:12px;color:var(--red);margin-bottom:6px;">${errores} no se pudieron guardar — intenta de nuevo</div>` : ''}
+      <div style="font-size:12px;color:var(--text2);margin-bottom:16px;">Ya están en tu CRM como "Nuevo". La app los irá recordándote de a poco.</div>
       <div style="background:linear-gradient(135deg,#F59E0B15,var(--s2));border:1px solid #F59E0B30;border-radius:10px;padding:12px;margin-bottom:16px;">
         <div style="font-size:11px;color:var(--yellow);font-weight:700;margin-bottom:4px;">Siguiente paso recomendado</div>
         <div style="font-size:12px;color:var(--text2);">Ve a Mensajes → elige una situación → la app genera el mensaje personalizado para cada uno.</div>
       </div>
-      <button onclick="cerrarModal('modal-excel');cargarProspectos();" style="width:100%;background:var(--orange);color:white;border:none;border-radius:10px;padding:13px;font-family:'Syne',sans-serif;font-weight:700;font-size:13px;cursor:pointer;">Ver mis prospectos →</button>
+      <button onclick="cerrarModal('modal-excel');cargarProspectos(window._currentUid);" style="width:100%;background:var(--orange);color:white;border:none;border-radius:10px;padding:13px;font-family:'Syne',sans-serif;font-weight:700;font-size:13px;cursor:pointer;">Ver mis prospectos →</button>
     </div>`;
 
-  await cargarProspectos();
+  await cargarProspectos(window._currentUid);
 }
 
 function compartirWrapped(){
