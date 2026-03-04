@@ -223,3 +223,152 @@ function goTo(screen, btn){
     });
   });
 })();
+
+
+// ═══════════════════════════════════════════════════════════
+// MOTOR DE PERMISOS POR PLAN
+// ═══════════════════════════════════════════════════════════
+
+// ── Matriz de límites por plan ──
+const PLANES_LIMITES = {
+  free: {
+    prospectos_max:  25,
+    mensajes_ia_mes: 5,
+    excel_import:    false,
+    semaforo_wa:     false,
+    weekly_wrapped:  true,
+    inventario:      true,
+  },
+  pro: {
+    prospectos_max:  Infinity,
+    mensajes_ia_mes: 50,
+    excel_import:    true,
+    semaforo_wa:     false,
+    weekly_wrapped:  true,
+    inventario:      true,
+  },
+  elite: {
+    prospectos_max:  Infinity,
+    mensajes_ia_mes: 200,
+    excel_import:    true,
+    semaforo_wa:     true,
+    weekly_wrapped:  true,
+    inventario:      true,
+  }
+};
+
+// ── Textos del paywall por acción bloqueada ──
+const PAYWALL_TEXTOS = {
+  prospectos_max: {
+    titulo:  '📋 Límite de prospectos alcanzado',
+    mensaje: 'El plan Gratuito permite hasta 25 prospectos activos. Con Pro tienes ilimitados.',
+    plan:    'pro'
+  },
+  mensajes_ia_mes: {
+    titulo:  '🤖 Límite de mensajes IA alcanzado',
+    mensaje: 'Usaste todos tus mensajes IA este mes. Pro te da 50/mes, Elite 200/mes.',
+    plan:    'pro'
+  },
+  excel_import: {
+    titulo:  '📊 Importación de Excel — Plan Pro',
+    mensaje: 'Importar contactos desde Excel está disponible desde el Plan Pro.',
+    plan:    'pro'
+  },
+  semaforo_wa: {
+    titulo:  '🚦 Semáforo WhatsApp — Plan Elite',
+    mensaje: 'El semáforo de salud de WhatsApp es exclusivo del Plan Elite.',
+    plan:    'elite'
+  }
+};
+
+// ── Obtener plan actual del vendedor ──
+function getPlanActual() {
+  if (vendedorData && vendedorData.plan) {
+    return vendedorData.plan; // 'free', 'pro', 'elite'
+  }
+  return 'free';
+}
+
+// ── Verificar si el vendedor puede realizar una acción ──
+// accion: clave de PLANES_LIMITES (ej: 'excel_import', 'semaforo_wa')
+// valorActual: solo para límites numéricos (ej: conteo de prospectos)
+function puedeHacer(accion, valorActual) {
+  const plan   = getPlanActual();
+  const limite = PLANES_LIMITES[plan];
+  if (!limite) return true;
+
+  const permiso = limite[accion];
+
+  // Límite booleano
+  if (typeof permiso === 'boolean') return permiso;
+
+  // Límite numérico
+  if (typeof permiso === 'number' && valorActual !== undefined) {
+    return valorActual < permiso;
+  }
+
+  return true;
+}
+
+// ── Mensajes IA restantes este mes ──
+function mensajesIARestantes() {
+  const plan  = getPlanActual();
+  const max   = PLANES_LIMITES[plan].mensajes_ia_mes;
+  const usado = vendedorData?.mensajes_ia_mes || 0;
+  return Math.max(0, max - usado);
+}
+
+// ── Modal de paywall — aparece cuando algo está bloqueado ──
+function mostrarPaywall(accion) {
+  const info = PAYWALL_TEXTOS[accion] || {
+    titulo:  '⭐ Función Premium',
+    mensaje: 'Esta función no está disponible en tu plan actual.',
+    plan:    'pro'
+  };
+
+  const planLabel = info.plan === 'elite' ? 'Elite $499/mes' : 'Pro $199/mes';
+  const planColor = info.plan === 'elite' ? 'var(--purple)' : 'var(--orange)';
+
+  // Crear el modal si no existe en el DOM
+  let overlay = document.getElementById('modal-paywall');
+  if (!overlay) {
+    overlay = document.createElement('div');
+    overlay.id        = 'modal-paywall';
+    overlay.className = 'modal-overlay';
+    overlay.innerHTML = `
+      <div class="modal" style="text-align:center;padding:28px 20px;">
+        <div id="paywall-icon"  style="font-size:48px;margin-bottom:12px;"></div>
+        <div id="paywall-title" style="font-family:'Syne',sans-serif;font-size:18px;font-weight:800;color:var(--text);margin-bottom:8px;"></div>
+        <div id="paywall-msg"   style="font-size:13px;color:var(--text2);line-height:1.6;margin-bottom:20px;"></div>
+        <button id="paywall-btn-upgrade" class="btn btn-p" style="margin-bottom:10px;font-size:13px;" onclick="cerrarPaywall();goTo('perfil');">
+          ⭐ Ver planes y precios
+        </button>
+        <button class="btn btn-s" style="font-size:12px;" onclick="cerrarPaywall();">
+          Ahora no
+        </button>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+
+    // Cerrar tocando el fondo oscuro
+    overlay.addEventListener('click', e => {
+      if (e.target === overlay) cerrarPaywall();
+    });
+  }
+
+  // Actualizar contenido según la acción bloqueada
+  const partes = info.titulo.split(' ');
+  document.getElementById('paywall-icon').textContent  = partes[0];
+  document.getElementById('paywall-title').textContent = partes.slice(1).join(' ');
+  document.getElementById('paywall-msg').textContent   = info.mensaje;
+
+  const btn = document.getElementById('paywall-btn-upgrade');
+  btn.style.background = planColor;
+  btn.textContent      = `⭐ Mejorar a ${planLabel}`;
+
+  overlay.classList.add('open');
+}
+
+function cerrarPaywall() {
+  document.getElementById('modal-paywall')?.classList.remove('open');
+}
