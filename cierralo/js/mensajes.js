@@ -3,10 +3,6 @@
 // Depende de: config.js, crm.js, dashboard.js
 // ═══════════════════════════════════════════════════════════
 
-// ═══════════════════════════════════════════════════════════
-// SESIÓN 4 PARTE 2 — FLUJO MENSAJE CONTEXTUAL + TIEMPOS + CONFIRMACIÓN INTELIGENTE
-// ═══════════════════════════════════════════════════════════
-
 // ── SITUACIONES POR ETAPA ──
 const SITUACIONES = {
   nuevo: [
@@ -132,15 +128,12 @@ Hace un tiempo platicamos sobre el ${p.auto_interes||'auto'}. He tenido algunas 
 ¿Te parece si retomamos la conversación? Sin compromiso 🤝`,
 };
 
-// ── ESTADO GLOBAL MENSAJES ──
-
 // ── RENDERIZAR PANTALLA MENSAJES ──
 function renderPantallaMensajes(){
   const activos = prospectos.filter(p => !['ganado','perdido'].includes(p.etapa));
   const lista = document.getElementById('msg-prospecto-lista');
   if(!lista) return;
 
-  // Mostrar banner si hay mensaje pendiente de confirmar
   renderPendingBanner();
 
   if(activos.length === 0){
@@ -152,7 +145,6 @@ function renderPantallaMensajes(){
     return;
   }
 
-  // Ordenar: más calientes primero
   const ordenados = [...activos].sort((a,b) => calcTemp(b) - calcTemp(a));
 
   lista.innerHTML = '';
@@ -173,6 +165,52 @@ function renderPantallaMensajes(){
       <div style="font-size:12px;font-weight:700;color:${tempColor(temp)};">${tempEmoji(temp)} ${temp}°</div>`;
     lista.appendChild(div);
   });
+
+  // Mostrar contador de mensajes IA restantes si es Free
+  _renderContadorIA();
+}
+
+// ── Contador de mensajes IA visible para plan Free ──
+function _renderContadorIA() {
+  const plan = getPlanActual();
+  if (plan !== 'free') return; // Pro y Elite no necesitan ver el contador
+
+  const restantes = mensajesIARestantes();
+  const max       = PLANES_LIMITES.free.mensajes_ia_mes;
+
+  let contador = document.getElementById('ia-contador-banner');
+  if (!contador) {
+    contador = document.createElement('div');
+    contador.id = 'ia-contador-banner';
+    const lista = document.getElementById('msg-prospecto-lista');
+    if (lista) lista.insertAdjacentElement('afterend', contador);
+  }
+
+  if (restantes === 0) {
+    contador.innerHTML = `
+      <div style="margin:8px 0;background:var(--redBg);border:1px solid #EF444430;border-radius:10px;padding:12px;display:flex;align-items:center;gap:10px;">
+        <div style="font-size:24px;">🤖</div>
+        <div style="flex:1;">
+          <div style="font-size:12px;font-weight:700;color:var(--red);margin-bottom:2px;">Sin mensajes IA este mes</div>
+          <div style="font-size:11px;color:var(--text2);">Aún puedes usar las plantillas. Mejora a Pro para 50/mes.</div>
+        </div>
+        <div onclick="mostrarPaywall('mensajes_ia_mes')" style="background:var(--orange);color:white;border-radius:8px;padding:6px 10px;font-size:11px;font-weight:700;cursor:pointer;">Pro →</div>
+      </div>`;
+  } else {
+    const pct = Math.round((restantes / max) * 100);
+    const color = restantes <= 1 ? 'var(--red)' : restantes <= 2 ? 'var(--yellow)' : 'var(--blue)';
+    contador.innerHTML = `
+      <div style="margin:8px 0;background:var(--s2);border:1px solid var(--border);border-radius:10px;padding:10px 12px;display:flex;align-items:center;gap:10px;">
+        <div style="font-size:18px;">🤖</div>
+        <div style="flex:1;">
+          <div style="font-size:11px;color:var(--text2);margin-bottom:4px;">Mensajes IA restantes este mes</div>
+          <div style="height:4px;background:var(--s3);border-radius:2px;overflow:hidden;">
+            <div style="height:100%;width:${pct}%;background:${color};border-radius:2px;transition:width .3s;"></div>
+          </div>
+        </div>
+        <div style="font-size:14px;font-weight:800;color:${color};font-family:'Syne',sans-serif;">${restantes}/${max}</div>
+      </div>`;
+  }
 }
 
 function seleccionarProspectoMensaje(p){
@@ -181,7 +219,6 @@ function seleccionarProspectoMensaje(p){
   document.getElementById('msg-prospecto-activo').style.display = 'block';
   document.getElementById('msg-preview').style.display = 'none';
 
-  // Header del prospecto seleccionado
   const etapa = ETAPAS[p.etapa] || ETAPAS.nuevo;
   const temp = calcTemp(p);
   const hdr = document.getElementById('msg-prospecto-header');
@@ -195,7 +232,6 @@ function seleccionarProspectoMensaje(p){
     </div>
     <div style="font-size:11px;color:var(--text3);cursor:pointer;padding:4px 8px;background:var(--s2);border-radius:20px;" onclick="resetearSelectorProspecto()">✕ Cambiar</div>`;
 
-  // Situaciones según etapa
   const situaciones = SITUACIONES[p.etapa] || SITUACIONES_GENERICAS;
   const sitLista = document.getElementById('msg-situaciones-lista');
   sitLista.innerHTML = '';
@@ -223,22 +259,50 @@ function resetearSelectorProspecto(){
 }
 
 async function generarMensajePara(p, situacionId){
-  // Mostrar preview con estado de carga
+  // ── VERIFICAR LÍMITE DE MENSAJES IA ──
+  const restantes = mensajesIARestantes();
+  const usarIA    = restantes > 0;
+
+  // Si es Free y no tiene mensajes, avisar pero dejar usar plantilla
+  if (!usarIA && getPlanActual() === 'free') {
+    showToast('🤖 Sin mensajes IA — usando plantilla. Mejora a Pro para más.');
+  }
+
   document.getElementById('msg-para-nombre').textContent = p.nombre.split(' ')[0];
   document.getElementById('msg-preview').style.display = 'block';
   document.getElementById('msg-preview').scrollIntoView({behavior:'smooth', block:'nearest'});
   setMsgLoading(true);
 
-  // Intentar con IA — si falla, usar plantilla local
-  try {
-    const texto = await generarConIA(p, situacionId);
-    document.getElementById('msg-content').textContent = texto;
-  } catch(e) {
-    console.warn('IA no disponible, usando plantilla:', e.message);
+  let textoGenerado = '';
+  let usóIA = false;
+
+  if (usarIA) {
+    try {
+      textoGenerado = await generarConIA(p, situacionId);
+      usóIA = true;
+    } catch(e) {
+      console.warn('IA no disponible, usando plantilla:', e.message);
+      const fn = PLANTILLAS[situacionId];
+      textoGenerado = fn ? fn(p) : `Hola ${p.nombre.split(' ')[0]}, ¿cómo estás? 😊`;
+    }
+  } else {
+    // Sin mensajes disponibles — usar plantilla directamente
     const fn = PLANTILLAS[situacionId];
-    document.getElementById('msg-content').textContent = fn ? fn(p) : `Hola ${p.nombre.split(' ')[0]}, ¿cómo estás? 😊`;
+    textoGenerado = fn ? fn(p) : `Hola ${p.nombre.split(' ')[0]}, ¿cómo estás? 😊`;
   }
+
+  document.getElementById('msg-content').textContent = textoGenerado;
   setMsgLoading(false);
+
+  // Registrar uso solo si la IA efectivamente generó el mensaje
+  if (usóIA) {
+    await registrarMensajeIA();
+    _renderContadorIA(); // Actualizar el contador visualmente
+  }
+
+  // Guardar referencia para regenerar
+  _ultimoProspecto = p;
+  _ultimaSituacion = situacionId;
 }
 
 function setMsgLoading(loading){
@@ -301,7 +365,6 @@ DATOS DEL VENDEDOR:
 
 Escribe SOLO el mensaje, sin explicaciones ni comillas.`;
 
-  // Groq API — compatible con OpenAI, acepta llamadas desde navegador
   const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
     method: 'POST',
     headers: {
@@ -342,14 +405,11 @@ function abrirMensajeDesdeProspecto(){
 function copiarMsgContextual(){
   if(!prospectoMensajeActual){ copyMsg(); return; }
   const txt = document.getElementById('msg-content').textContent;
-  // Verificar límite del semáforo antes de copiar
   if(!verificarLimiteWA()) return;
 
   navigator.clipboard.writeText(txt)
     .then(() => {
-      // Registrar mensaje enviado para el semáforo
       registrarMensajeEnviado();
-      // Agregar a la cola de pendientes — no reemplaza, acumula
       const nuevo = {
         id: Date.now(),
         prospecto: { ...prospectoMensajeActual },
@@ -358,11 +418,7 @@ function copiarMsgContextual(){
       colaPendientes.push(nuevo);
       guardarCola();
       showToast('✅ Copiado — mándalo en WhatsApp 📲');
-      // Timer individual: mostrar banner después de 40 min
-      // El banner aparece en pantalla — el vendedor lo toca cuando quiera
-      setTimeout(() => {
-        renderPendingBanner();
-      }, 40 * 60 * 1000);
+      setTimeout(() => { renderPendingBanner(); }, 40 * 60 * 1000);
     })
     .catch(() => showToast('Selecciona el texto y cópialo manualmente'));
 }
@@ -377,9 +433,7 @@ function cargarCola(){
     if(saved){
       const todos = JSON.parse(saved);
       const ahora = Date.now();
-      // Limpiar mensajes con más de 24h — ya no tiene sentido confirmarlos
       colaPendientes = todos.filter(i => (ahora - i.timestamp) < 24 * 60 * 60 * 1000);
-      // Si se limpiaron algunos, actualizar localStorage
       if(colaPendientes.length !== todos.length) guardarCola();
     }
   } catch(e){ colaPendientes = []; }
@@ -387,14 +441,12 @@ function cargarCola(){
 
 // ── COLA DE PENDIENTES — BANNERS ──
 function renderPendingBanner(){
-  // Limpiar banners existentes en ambas pantallas
   ['scr-dashboard','scr-mensajes'].forEach(screenId => {
     const screen = document.getElementById(screenId);
     if(!screen) return;
     screen.querySelectorAll('.pending-banner').forEach(b => b.remove());
     if(colaPendientes.length === 0) return;
 
-    // Contenedor de banners
     let contenedor = screen.querySelector('.pending-contenedor');
     if(!contenedor){
       contenedor = document.createElement('div');
@@ -409,7 +461,6 @@ function renderPendingBanner(){
     }
     contenedor.innerHTML = '';
 
-    // Header si hay más de uno
     if(colaPendientes.length > 1){
       const hdr = document.createElement('div');
       hdr.style.cssText = 'padding:6px 16px 4px;font-size:10px;font-weight:700;color:var(--yellow);text-transform:uppercase;letter-spacing:.5px;';
@@ -417,13 +468,12 @@ function renderPendingBanner(){
       contenedor.appendChild(hdr);
     }
 
-    // Un banner por cada pendiente
-    // Solo mostrar si esta pantalla está activa
     if(!screen.classList.contains('active')) {
       contenedor.style.display = 'none';
     } else {
       contenedor.style.display = '';
     }
+
     colaPendientes.forEach(item => {
       const p = item.prospecto;
       const mins = Math.floor((Date.now() - item.timestamp) / 60000);
@@ -448,7 +498,6 @@ function abrirConfirmacionPendiente(pendingId){
   const item = colaPendientes.find(i => i.id === pendingId);
   if(!item) return;
 
-  // No abrir si la pantalla activa no es dashboard o mensajes
   const screenActiva = document.querySelector('.screen.active');
   const idActivo = screenActiva?.id || '';
   if(!idActivo.includes('dashboard') && !idActivo.includes('mensajes')) return;
@@ -456,7 +505,6 @@ function abrirConfirmacionPendiente(pendingId){
   window._respondingId = pendingId;
   const prospecto = item.prospecto;
 
-  // Rellenar modal directamente — sin depender del módulo dashboard
   const modalEl  = document.getElementById('modal-confirmacion');
   const avatarEl = document.getElementById('conf-avatar');
   const nombreEl = document.getElementById('conf-nombre');
@@ -469,16 +517,12 @@ function abrirConfirmacionPendiente(pendingId){
   }
   if(nombreEl) nombreEl.textContent = prospecto.nombre || '';
 
-  // Guardar referencia global para que registrarRespuesta sepa a quién actualizar
   prospectoConfirmacion = prospecto;
-
   modalEl.classList.add('open');
 }
 
-// Override registrarRespuesta — elimina solo el item respondido de la cola
 const _origRegistrar = window.registrarRespuesta;
 window.registrarRespuesta = async function(tipo){
-  // Eliminar solo el pendiente que se está respondiendo
   if(window._respondingId){
     colaPendientes = colaPendientes.filter(i => i.id !== window._respondingId);
     window._respondingId = null;
@@ -488,9 +532,7 @@ window.registrarRespuesta = async function(tipo){
   if(_origRegistrar) await _origRegistrar(tipo);
 };
 
-// ── TIEMPOS DE ALERTA SEGÚN METODOLOGÍA AUTOMOTRIZ ──
-// Basado en evidencia: 58.9% compra en 3 días del primer contacto
-// Fuente: estudios de CRM automotriz internacionales
+// ── TIEMPOS DE ALERTA ──
 const TIEMPOS_ALERTA = {
   nuevo:      { horas: 4,   urgencia: 'alta',  msg: 'Nuevo prospecto sin primer contacto. Responder en las primeras horas es crítico — el 78% compra del primer vendedor que responde.' },
   contactado: { horas: 24,  urgencia: 'alta',  msg: 'Llevan más de 24h sin respuesta. Mantén el momentum — el interés baja rápido.' },
@@ -499,7 +541,6 @@ const TIEMPOS_ALERTA = {
   tramite:    { horas: 24,  urgencia: 'alta',  msg: 'En trámite sin contacto. Asegúrate de que todo vaya bien con sus documentos.' },
 };
 
-// Sobrescribir generarAlertas con tiempos corregidos
 window.generarAlertas = function(){
   const alertas = [];
   const hoy = new Date();
@@ -528,7 +569,6 @@ window.generarAlertas = function(){
     }
   });
 
-  // Alertas de inventario (sin cambio: 21 días)
   autos.forEach(a => {
     const dias = Math.floor((hoy - new Date(a.created_at)) / 86400000);
     if(a.estado === 'disponible' && dias >= 21){
@@ -547,7 +587,6 @@ window.generarAlertas = function(){
   if(typeof renderAlertas === 'function') renderAlertas(alertas);
 };
 
-// ── HOOK: renderizar pantalla mensajes cuando se abre ──
 const _origGoTo = window.goTo;
 window.goTo = function(screen){
   if(_origGoTo) _origGoTo(screen);
@@ -562,13 +601,11 @@ window.goTo = function(screen){
   }
 };
 
-// Al cargar la app: restaurar cola, limpiar vencidos (+24h), mostrar banners
 window.addEventListener('load', () => {
   setTimeout(() => {
     cargarCola();
     if(colaPendientes.length === 0) return;
     const ahora = Date.now();
-    // Solo programar timers para los que aun no cumplen 40 min
     colaPendientes.forEach(item => {
       const transcurrido = ahora - item.timestamp;
       if(transcurrido < 40 * 60 * 1000){
@@ -576,7 +613,6 @@ window.addEventListener('load', () => {
         setTimeout(() => renderPendingBanner(), msRestantes);
       }
     });
-    // Mostrar banners de los que ya cumplieron el tiempo (sin abrir modal solo)
     renderPendingBanner();
   }, 1500);
 });
