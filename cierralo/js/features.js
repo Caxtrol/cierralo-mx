@@ -383,6 +383,20 @@ function mostrarPreviewExcel(filas){
     return;
   }
 
+  // Función de similitud local — por si crm.js no la tiene disponible aún
+  const _similitud = typeof similitud === 'function' ? similitud : function(a, b) {
+    if(a === b) return 1;
+    if(!a || !b) return 0;
+    const longer = a.length > b.length ? a : b;
+    const shorter = a.length > b.length ? b : a;
+    if(longer.length === 0) return 1;
+    let matches = 0;
+    for(let i = 0; i < shorter.length; i++){
+      if(longer.includes(shorter[i])) matches++;
+    }
+    return matches / longer.length;
+  };
+
   const validas = filas.filter(r => r[colNombre] && r[colTel]);
   let nuevos = 0, duplicados = 0;
   const procesadas = [];
@@ -392,7 +406,7 @@ function mostrarPreviewExcel(filas){
     const nombre = row[colNombre].trim();
     const existe = prospectos.some(p =>
       (p.telefono || '').replace(/\D/g,'').includes(tel.slice(-8)) ||
-      similitud(p.nombre.toLowerCase(), nombre.toLowerCase()) > 0.85
+      _similitud(p.nombre.toLowerCase(), nombre.toLowerCase()) > 0.85
     );
     if(existe){
       duplicados++;
