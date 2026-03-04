@@ -168,16 +168,17 @@ async function loginConGoogle() {
   const { error } = await sb.auth.signInWithOAuth({
     provider: 'google',
     options: {
-      redirectTo: window.location.origin + window.location.pathname,
-      queryParams: { prompt: 'select_account' }
+      redirectTo: 'https://cierralo.mx',
+      skipBrowserRedirect: false,
+      queryParams: { prompt: 'select_account', access_type: 'offline' },
+      flowType: 'pkce'
     }
   });
 
   if (error) {
     showToast('❌ Error con Google: ' + error.message);
-    if (btn) { btn.textContent = '🔵 Continuar con Google'; btn.disabled = false; }
+    if (btn) { btn.textContent = 'Continuar con Google'; btn.disabled = false; }
   }
-  // Si no hay error, Google redirige y al regresar onAuthStateChange se dispara
 }
 
 async function loginConGoogleRegistro() {
@@ -187,14 +188,16 @@ async function loginConGoogleRegistro() {
   const { error } = await sb.auth.signInWithOAuth({
     provider: 'google',
     options: {
-      redirectTo: window.location.origin + window.location.pathname,
-      queryParams: { prompt: 'select_account' }
+      redirectTo: 'https://cierralo.mx',
+      skipBrowserRedirect: false,
+      queryParams: { prompt: 'select_account', access_type: 'offline' },
+      flowType: 'pkce'
     }
   });
 
   if (error) {
     showToast('❌ Error con Google: ' + error.message);
-    if (btn) { btn.textContent = '🔵 Registrarme con Google'; btn.disabled = false; }
+    if (btn) { btn.textContent = 'Registrarme con Google'; btn.disabled = false; }
   }
 }
 
