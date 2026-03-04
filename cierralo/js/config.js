@@ -6,13 +6,14 @@
 const SUPABASE_URL = 'https://nkjradximipkrzscgvhv.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_53Uf0nvrDI8I0iVRqgDA7g_4RJDPl3j';
 const { createClient } = supabase;
+const SUPABASE_AUTH_KEY = 'sb-nkjradximipkrzscgvhv-auth-token';
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY, {
   auth: {
-    flowType:           'pkce',   // ← NUEVO: Google OAuth sin bloqueo de cookies
+    flowType:           'pkce',
     persistSession:     true,
     autoRefreshToken:   true,
-    detectSessionInUrl: true,     // ← CAMBIO: detecta token al regresar de Google
-    storageKey:         'cierralo_session',
+    detectSessionInUrl: true,
+    // Usar clave nativa de Supabase — no la sobreescribimos
   }
 });
 
