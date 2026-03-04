@@ -20,21 +20,32 @@ window.addEventListener('load', async () => {
 
   // ── Detectar regreso de Google OAuth (token en hash de URL) ──
   const hash = window.location.hash;
-  if (hash && (hash.includes('access_token') || hash.includes('error'))) {
-    // Limpiar URL sin recargar — quita el feo #access_token=...
-    window.history.replaceState(null, '', window.location.pathname);
-    // Supabase detecta el hash automáticamente y dispara SIGNED_IN en onAuthStateChange
-    // Solo necesitamos esperar más tiempo si viene de OAuth
+  if (hash && hash.includes('access_token')) {
+    // Extraer el token del hash manualmente y establecer la sesión
     clearTimeout(fallback);
-    const fallbackOAuth = setTimeout(() => {
-      document.getElementById('splash').classList.add('hidden');
-      if (!appIniciada) {
+    const params = new URLSearchParams(hash.substring(1));
+    const accessToken  = params.get('access_token');
+    const refreshToken = params.get('refresh_token');
+
+    // Limpiar URL sin recargar
+    window.history.replaceState(null, '', window.location.pathname);
+
+    if (accessToken && refreshToken) {
+      try {
+        const { data, error } = await sb.auth.setSession({
+          access_token:  accessToken,
+          refresh_token: refreshToken
+        });
+        if (error) throw error;
+        // setSession dispara SIGNED_IN en onAuthStateChange — él se encarga del resto
+      } catch (e) {
+        console.error('[Auth] Error procesando token OAuth:', e);
+        document.getElementById('splash').classList.add('hidden');
         showPage('login');
-        showToast('❌ Error con Google. Intenta de nuevo.');
+        showToast('❌ Error al entrar con Google. Intenta de nuevo.');
       }
-    }, 8000);
-    // Guardar referencia para cancelar si SIGNED_IN llega
-    window._fallbackOAuth = fallbackOAuth;
+    }
+    return; // onAuthStateChange toma el control desde aquí
   }
 
   // Hora del día en dashboard
