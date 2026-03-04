@@ -1,49 +1,54 @@
 // ═══════════════════════════════════════════════════════════
-// AUTH.JS — Inicio de app, Login PIN, Registro, Onboarding
-// Depende de: config.js
+// AUTH.JS — Ciérralo.mx
+// Sistema: Google OAuth + SMS OTP + PIN legacy
+// Sesión 13 — Marzo 2026
+// Depende de: config.js (carga primero)
 // ═══════════════════════════════════════════════════════════
 
+// Variable para guardar teléfono durante flujo SMS
+let _loginTelefono = '';
+let _reenvioInterval = null;
 
-const GROQ_KEY = 'TU_GROQ_API_KEY_AQUI'; // ← Sesión 5: pega tu key aquí
-
-
-
-
+// ════════════════════════════════════════════════════════
+// INIT — al cargar la página
+// ════════════════════════════════════════════════════════
 window.addEventListener('load', async () => {
-  // Fallback: si en 5s nada cargó, mostrar login
+  // Salud de pantalla por si algo falla
   const fallback = setTimeout(() => {
     document.getElementById('splash').classList.add('hidden');
-    if(!appIniciada) showPage('login');
+    if (!appIniciada) showPage('login');
   }, 5000);
 
+  // Hora del día en dashboard
   const h = new Date().getHours();
   const greetEl = document.getElementById('greeting-time');
-  if(h<12) greetEl.textContent='Buenos días ☀️';
-  else if(h<19) greetEl.textContent='Buenas tardes 🌤️';
-  else greetEl.textContent='Buenas noches 🌙';
+  if (greetEl) {
+    if (h < 12)      greetEl.textContent = 'Buenos días ☀️';
+    else if (h < 19) greetEl.textContent = 'Buenas tardes 🌤️';
+    else             greetEl.textContent = 'Buenas noches 🌙';
+  }
 
-  const meses=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
-  const mesEl=document.getElementById('dash-mes');
-  if(mesEl) mesEl.textContent=meses[new Date().getMonth()]+' '+new Date().getFullYear();
+  // Mes actual en dashboard
+  const meses = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+  const mesEl = document.getElementById('dash-mes');
+  if (mesEl) mesEl.textContent = meses[new Date().getMonth()] + ' ' + new Date().getFullYear();
 
-  // ── onAuthStateChange: única fuente de verdad para el estado de sesión ──
-  // Supabase lo dispara automáticamente al cargar si hay refresh_token válido
-  sb.auth.onAuthStateChange(async(event, session)=>{
-    console.log('Auth:', event, session?.user?.id || 'sin sesión');
+  // ── onAuthStateChange: ÚNICA fuente de verdad ──
+  sb.auth.onAuthStateChange(async (event, session) => {
+    console.log('[Auth]', event, session?.user?.id || 'sin sesión');
 
-    if(event==='SIGNED_IN' || event==='TOKEN_REFRESHED'){
-      if(session?.user){
-        // Guardar tokens frescos en localStorage Y en memoria
-        // La memoria sobrevive a los SIGNED_OUT automáticos de Supabase
-        window._authToken = session.access_token;
+    if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+      if (session?.user) {
+        window._authToken    = session.access_token;
         window._refreshToken = session.refresh_token;
-        window._currentUid = session.user.id; // Backup uid que sobrevive a SIGNED_OUT
+        window._currentUid   = session.user.id;
         localStorage.setItem('cierralo_session', JSON.stringify({
-          access_token: session.access_token,
+          access_token:  session.access_token,
           refresh_token: session.refresh_token
         }));
         currentUser = session.user;
-        if(!appIniciada){
+
+        if (!appIniciada) {
           appIniciada = true;
           clearTimeout(fallback);
           document.getElementById('splash').classList.add('hidden');
@@ -52,108 +57,187 @@ window.addEventListener('load', async () => {
       }
     }
 
-    if(event==='SIGNED_OUT'){
-      // Solo cerrar sesión si el usuario lo pidió explícitamente
-      // Los SIGNED_OUT automáticos de Supabase durante refresh se ignoran
-      if(window._signOutExplicito){
+    if (event === 'SIGNED_OUT') {
+      // Supabase dispara SIGNED_OUT al renovar token — ignorar si no fue explícito
+      if (window._signOutExplicito) {
         window._signOutExplicito = false;
-        appIniciada = false;
-        currentUser = null;
+        appIniciada  = false;
+        currentUser  = null;
         vendedorData = null;
-        obMeta = null;
-        obProblema = null;
+        obMeta       = null;
+        obProblema   = null;
         localStorage.removeItem('cierralo_session');
         clearTimeout(fallback);
         document.getElementById('splash').classList.add('hidden');
         showPage('login');
+        mostrarLoginStep('login-step-inicio');
       }
     }
   });
 
-  // ── Restaurar sesión con refresh_token guardado ──
-  // No dependemos de Supabase internal storage — usamos nuestro propio localStorage
-  // El refresh_token dura 60 días y es el que permite recuperar la sesión
+  // ── Restaurar sesión guardada ──
   const sesionRaw = localStorage.getItem('cierralo_session');
-  if(sesionRaw){
+  if (sesionRaw) {
     try {
       const sesion = JSON.parse(sesionRaw);
-      if(sesion?.refresh_token){
-        // refreshSession con nuestro refresh_token — dispara SIGNED_IN si es válido
+      if (sesion?.refresh_token) {
         const { error } = await sb.auth.refreshSession({ refresh_token: sesion.refresh_token });
-        if(error){
-          console.warn('refreshSession falló:', error.message);
-          // Token expirado o inválido — mostrar login
-          setTimeout(() => {
-            if(!appIniciada){
-              clearTimeout(fallback);
-              document.getElementById('splash').classList.add('hidden');
-              showPage('login');
-            }
-          }, 500);
+        if (error) {
+          console.warn('[Auth] refreshSession falló:', error.message);
+          clearTimeout(fallback);
+          if (!appIniciada) {
+            document.getElementById('splash').classList.add('hidden');
+            showPage('login');
+          }
         }
-        // Si refreshSession OK → onAuthStateChange dispara SIGNED_IN → loadVendedor()
+        // Si ok, onAuthStateChange dispara SIGNED_IN automáticamente
       } else {
-        setTimeout(() => { if(!appIniciada){ clearTimeout(fallback); document.getElementById('splash').classList.add('hidden'); showPage('login'); } }, 500);
+        lanzarLogin(fallback);
       }
-    } catch(e){
-      setTimeout(() => { if(!appIniciada){ clearTimeout(fallback); document.getElementById('splash').classList.add('hidden'); showPage('login'); } }, 500);
+    } catch (e) {
+      lanzarLogin(fallback);
     }
   } else {
-    // Sin sesión guardada — mostrar login
-    setTimeout(() => {
-      if(!appIniciada){
-        clearTimeout(fallback);
-        document.getElementById('splash').classList.add('hidden');
-        showPage('login');
-      }
-    }, 500);
+    lanzarLogin(fallback);
   }
 });
 
-// ── Variables de estado del login ──
-
-// ── Navegación entre pasos ──
-function irALogin(){
-  limpiarPin('pin-1','pin-2','pin-3','pin-4');
-  document.getElementById('login-tel').value = '';
-  mostrarLoginStep('login-step-tel');
-  setTimeout(()=>document.getElementById('login-tel').focus(), 100);
-}
-function irARegistro(){
-  limpiarPin('pin-n1','pin-n2','pin-n3','pin-n4');
-  document.getElementById('login-tel-nuevo').value = '';
-  mostrarLoginStep('login-step-pin-nuevo');
-  setTimeout(()=>document.getElementById('login-tel-nuevo').focus(), 100);
+function lanzarLogin(fallback) {
+  setTimeout(() => {
+    if (!appIniciada) {
+      if (fallback) clearTimeout(fallback);
+      document.getElementById('splash').classList.add('hidden');
+      showPage('login');
+    }
+  }, 400);
 }
 
-// ── PASO 2A: login con PIN existente ──
-async function confirmarPin(){
-  const tel = document.getElementById('login-tel').value.replace(/\s/g,'').trim();
-  if(tel.length < 8){ showToast('⚠️ Ingresa tu número'); return; }
-  _loginTelefono = '+52' + tel.replace(/^\+52/,'');
+// ════════════════════════════════════════════════════════
+// NAVEGACIÓN ENTRE PASOS DEL LOGIN
+// ════════════════════════════════════════════════════════
+function mostrarLoginStep(stepId) {
+  document.querySelectorAll('.login-step').forEach(s => s.classList.remove('active'));
+  const el = document.getElementById(stepId);
+  if (el) el.classList.add('active');
+}
 
-  const pin = getPinValue('pin-1','pin-2','pin-3','pin-4');
-  if(pin.length < 4){ showToast('⚠️ Ingresa los 4 dígitos'); return; }
+function irALogin()   { mostrarLoginStep('login-step-opciones'); }
+function irARegistro(){ mostrarLoginStep('login-step-registro'); }
+function volverAlInicio() { mostrarLoginStep('login-step-inicio'); }
+function volverAlRegistro() { mostrarLoginStep('login-step-registro'); }
+function volverATelefono()  { mostrarLoginStep('login-step-sms-tel'); }
 
-  const btn = document.getElementById('login-pin-btn');
-  btn.textContent = 'Entrando...'; btn.disabled = true;
+// ════════════════════════════════════════════════════════
+// 1. LOGIN CON GOOGLE
+// ════════════════════════════════════════════════════════
+async function loginConGoogle() {
+  const btn = document.getElementById('btn-google');
+  if (btn) { btn.textContent = 'Conectando...'; btn.disabled = true; }
 
-  const emailFake = 'tel' + _loginTelefono.replace('+','') + '@gmail.com';
-  const {data, error} = await sb.auth.signInWithPassword({
-    email: emailFake,
-    password: 'PIN_' + pin + '_' + _loginTelefono
+  const { error } = await sb.auth.signInWithOAuth({
+    provider: 'google',
+    options: {
+      redirectTo: window.location.origin + window.location.pathname,
+      queryParams: { prompt: 'select_account' }
+    }
   });
 
-  if(error){
-    showToast('❌ Número o PIN incorrecto. Intenta de nuevo.');
-    limpiarPin('pin-1','pin-2','pin-3','pin-4');
-    btn.textContent = 'Entrar a Ciérralo →'; btn.disabled = false;
-    setTimeout(()=>document.getElementById('pin-1').focus(), 100);
+  if (error) {
+    showToast('❌ Error con Google: ' + error.message);
+    if (btn) { btn.textContent = '🔵 Continuar con Google'; btn.disabled = false; }
+  }
+  // Si no hay error, Google redirige y al regresar onAuthStateChange se dispara
+}
+
+async function loginConGoogleRegistro() {
+  const btn = document.getElementById('btn-google-registro');
+  if (btn) { btn.textContent = 'Conectando...'; btn.disabled = true; }
+
+  const { error } = await sb.auth.signInWithOAuth({
+    provider: 'google',
+    options: {
+      redirectTo: window.location.origin + window.location.pathname,
+      queryParams: { prompt: 'select_account' }
+    }
+  });
+
+  if (error) {
+    showToast('❌ Error con Google: ' + error.message);
+    if (btn) { btn.textContent = '🔵 Registrarme con Google'; btn.disabled = false; }
+  }
+}
+
+// ════════════════════════════════════════════════════════
+// 2. LOGIN/REGISTRO CON SMS OTP
+// ════════════════════════════════════════════════════════
+// Paso 1: pedir número y enviar OTP
+async function enviarOTP() {
+  const telInput = document.getElementById('sms-tel');
+  if (!telInput) return;
+  const raw = telInput.value.replace(/[\s\-]/g, '').replace(/[^0-9]/g, '');
+  if (raw.length < 8) { showToast('⚠️ Ingresa tu número de WhatsApp'); return; }
+
+  const telefono = '+52' + raw.replace(/^52/, '');
+  _loginTelefono = telefono;
+
+  const btn = document.getElementById('btn-enviar-otp');
+  if (btn) { btn.textContent = 'Enviando código...'; btn.disabled = true; }
+
+  const { error } = await sb.auth.signInWithOtp({
+    phone: telefono,
+    options: { shouldCreateUser: true }
+  });
+
+  if (btn) { btn.textContent = 'Enviar código SMS →'; btn.disabled = false; }
+
+  if (error) {
+    showToast('❌ ' + (error.message.includes('limit') ? 'Espera un momento antes de reenviar' : error.message));
     return;
   }
 
+  localStorage.setItem('cierralo_otp_tel', telefono);
+
+  // Mostrar pantalla de verificación
+  const displayEl = document.getElementById('otp-tel-display');
+  if (displayEl) displayEl.textContent = telefono;
+  mostrarLoginStep('login-step-otp-verify');
+  setTimeout(() => { const el = document.getElementById('otp-1'); if (el) el.focus(); }, 200);
+  showToast('📱 Código enviado por SMS');
+  iniciarContadorReenvio();
+}
+
+// Paso 2: verificar código OTP
+async function verificarOTP() {
+  const telefono = _loginTelefono || localStorage.getItem('cierralo_otp_tel');
+  if (!telefono) { mostrarLoginStep('login-step-sms-tel'); return; }
+
+  const codigo = getOtpValue();
+  if (codigo.length < 6) { showToast('⚠️ Ingresa los 6 dígitos del código'); return; }
+
+  const btn = document.getElementById('btn-verificar-otp');
+  if (btn) { btn.textContent = 'Verificando...'; btn.disabled = true; }
+
+  const { data, error } = await sb.auth.verifyOtp({
+    phone: telefono,
+    token: codigo,
+    type:  'sms'
+  });
+
+  if (btn) { btn.textContent = 'Verificar →'; btn.disabled = false; }
+
+  if (error) {
+    showToast('❌ Código incorrecto o expirado.');
+    limpiarOtp();
+    setTimeout(() => { const el = document.getElementById('otp-1'); if (el) el.focus(); }, 100);
+    return;
+  }
+
+  // Sesión creada — onAuthStateChange dispara SIGNED_IN → loadVendedor()
+  window._authToken    = data.session.access_token;
+  window._refreshToken = data.session.refresh_token;
+  window._currentUid   = data.user.id;
   localStorage.setItem('cierralo_session', JSON.stringify({
-    access_token: data.session.access_token,
+    access_token:  data.session.access_token,
     refresh_token: data.session.refresh_token
   }));
   currentUser = data.user;
@@ -161,442 +245,585 @@ async function confirmarPin(){
   await loadVendedor();
 }
 
-// ── PASO 2B: registro con PIN nuevo ──
-async function registrarConPin(){
-  const tel = document.getElementById('login-tel-nuevo').value.replace(/\s/g,'').trim();
-  if(tel.length < 8){ showToast('⚠️ Ingresa tu número'); return; }
-  _loginTelefono = '+52' + tel.replace(/^\+52/,'');
+// ════════════════════════════════════════════════════════
+// 3. LOGIN CON PIN (usuarios legacy / ya registrados)
+// ════════════════════════════════════════════════════════
+async function confirmarPin() {
+  const telEl = document.getElementById('login-tel');
+  if (!telEl) return;
+  const raw = telEl.value.replace(/[\s\-]/g, '').replace(/[^0-9]/g, '');
+  if (raw.length < 8) { showToast('⚠️ Ingresa tu número'); return; }
+  _loginTelefono = '+52' + raw.replace(/^52/, '');
 
-  const pin = getPinValue('pin-n1','pin-n2','pin-n3','pin-n4');
-  if(pin.length < 4){ showToast('⚠️ Ingresa los 4 dígitos'); return; }
+  const pin = getPinValue('pin-1','pin-2','pin-3','pin-4');
+  if (pin.length < 4) { showToast('⚠️ Ingresa los 4 dígitos de tu PIN'); return; }
 
-  const btn = document.getElementById('login-nuevo-btn');
-  btn.textContent = 'Creando cuenta...'; btn.disabled = true;
+  const btn = document.getElementById('login-pin-btn');
+  if (btn) { btn.textContent = 'Entrando...'; btn.disabled = true; }
 
   const emailFake = 'tel' + _loginTelefono.replace('+','') + '@gmail.com';
-  const password = 'PIN_' + pin + '_' + _loginTelefono;
 
-  // Intentar signUp
-  const {data: signUpData, error: signUpError} = await sb.auth.signUp({
-    email: emailFake,
-    password: password
+  const { data, error } = await sb.auth.signInWithPassword({
+    email:    emailFake,
+    password: 'PIN_' + pin + '_' + _loginTelefono
   });
 
-  // Si ya existe el usuario, intentar login directamente
-  if(signUpError && signUpError.message.includes('already registered')){
-    showToast('⚠️ Este número ya tiene cuenta. Usa tu PIN.');
-    mostrarLoginStep('login-step-pin');
-    document.getElementById('pin-1').value='';
-    document.getElementById('pin-2').value='';
-    document.getElementById('pin-3').value='';
-    document.getElementById('pin-4').value='';
-    btn.textContent = 'Crear cuenta →'; btn.disabled = false;
-    setTimeout(()=>document.getElementById('pin-1').focus(), 100);
+  if (btn) { btn.textContent = 'Entrar a Ciérralo →'; btn.disabled = false; }
+
+  if (error) {
+    showToast('❌ Número o PIN incorrecto. ¿Olvidaste tu PIN?');
+    limpiarPin('pin-1','pin-2','pin-3','pin-4');
+    setTimeout(() => { const el = document.getElementById('pin-1'); if (el) el.focus(); }, 100);
     return;
   }
 
-  if(signUpError){
-    showToast('❌ ' + signUpError.message);
-    btn.textContent = 'Crear cuenta →'; btn.disabled = false;
-    return;
-  }
-
-  // Si el signUp devuelve sesión directa (confirm email OFF), usarla
-  if(signUpData.session){
-    localStorage.setItem('cierralo_session', JSON.stringify({
-      access_token: signUpData.session.access_token,
-      refresh_token: signUpData.session.refresh_token
-    }));
-    currentUser = signUpData.user;
-    appIniciada = true;
-    await loadVendedor();
-    return;
-  }
-
-  // Fallback: pequeña pausa y luego signIn
-  await new Promise(r => setTimeout(r, 800));
-  const {data: loginData, error: loginError} = await sb.auth.signInWithPassword({
-    email: emailFake,
-    password: password
-  });
-
-  if(loginError){
-    showToast('✅ Cuenta creada. Ingresa tu número y PIN para entrar.');
-    mostrarLoginStep('login-step-tel');
-    btn.textContent = 'Crear cuenta →'; btn.disabled = false;
-    return;
-  }
-
+  window._authToken    = data.session.access_token;
+  window._refreshToken = data.session.refresh_token;
+  window._currentUid   = data.user.id;
   localStorage.setItem('cierralo_session', JSON.stringify({
-    access_token: loginData.session.access_token,
-    refresh_token: loginData.session.refresh_token
+    access_token:  data.session.access_token,
+    refresh_token: data.session.refresh_token
   }));
-  currentUser = loginData.user;
+  currentUser = data.user;
   appIniciada = true;
   await loadVendedor();
 }
 
-// ── Helpers del PIN ──
-function getPinValue(id1,id2,id3,id4){
-  return [id1,id2,id3,id4].map(id=>{
-    const raw = document.getElementById(id).value.toString();
-    // Limpiar smart quotes y caracteres no numericos de iOS
-    const v = raw.replace(/[^0-9]/g, '');
-    return v ? v.slice(-1) : '';
-  }).join('');
+// PIN legacy — registro nuevo (usuarios que ya tienen cuenta pin)
+async function registrarConPin() {
+  const telEl = document.getElementById('login-tel-nuevo');
+  if (!telEl) return;
+  const raw = telEl.value.replace(/[\s\-]/g, '').replace(/[^0-9]/g, '');
+  if (raw.length < 8) { showToast('⚠️ Ingresa tu número de WhatsApp'); return; }
+  _loginTelefono = '+52' + raw.replace(/^52/, '');
+
+  const pin = getPinValue('pin-n1','pin-n2','pin-n3','pin-n4');
+  if (pin.length < 4) { showToast('⚠️ Elige un PIN de 4 dígitos'); return; }
+
+  const btn = document.getElementById('login-nuevo-btn');
+  if (btn) { btn.textContent = 'Creando cuenta...'; btn.disabled = true; }
+
+  const emailFake = 'tel' + _loginTelefono.replace('+','') + '@gmail.com';
+  const password  = 'PIN_' + pin + '_' + _loginTelefono;
+
+  const { data, error } = await sb.auth.signUp({ email: emailFake, password });
+
+  if (btn) { btn.textContent = 'Crear cuenta →'; btn.disabled = false; }
+
+  if (error) {
+    if (error.message.includes('already registered') || error.message.includes('already been registered')) {
+      showToast('⚠️ Ya tienes cuenta. Usa "Tengo cuenta → Entrar con PIN"');
+    } else {
+      showToast('❌ Error: ' + error.message);
+    }
+    return;
+  }
+
+  // Puede que Supabase requiera login después del signUp
+  if (!data.session) {
+    const { data: loginData, error: loginErr } = await sb.auth.signInWithPassword({ email: emailFake, password });
+    if (loginErr) { showToast('❌ ' + loginErr.message); return; }
+    window._authToken    = loginData.session.access_token;
+    window._refreshToken = loginData.session.refresh_token;
+    window._currentUid   = loginData.user.id;
+    localStorage.setItem('cierralo_session', JSON.stringify({
+      access_token:  loginData.session.access_token,
+      refresh_token: loginData.session.refresh_token
+    }));
+    currentUser = loginData.user;
+  } else {
+    window._authToken    = data.session.access_token;
+    window._refreshToken = data.session.refresh_token;
+    window._currentUid   = data.user.id;
+    localStorage.setItem('cierralo_session', JSON.stringify({
+      access_token:  data.session.access_token,
+      refresh_token: data.session.refresh_token
+    }));
+    currentUser = data.user;
+  }
+
+  appIniciada = true;
+  await loadVendedor();
 }
-function limpiarPin(id1,id2,id3,id4){
-  [id1,id2,id3,id4].forEach(id=>{
-    document.getElementById(id).value='';
-    document.getElementById(id).classList.remove('filled');
+
+// ════════════════════════════════════════════════════════
+// HELPERS — OTP
+// ════════════════════════════════════════════════════════
+function getOtpValue() {
+  return ['otp-1','otp-2','otp-3','otp-4','otp-5','otp-6']
+    .map(id => (document.getElementById(id)?.value || '').replace(/[^0-9]/g,'').slice(-1))
+    .join('');
+}
+
+function limpiarOtp() {
+  ['otp-1','otp-2','otp-3','otp-4','otp-5','otp-6'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) { el.value = ''; el.classList.remove('filled'); }
   });
 }
-function pinInput(el, num){
-  // Limpiar smart quotes y no numericos antes de procesar
-  const raw = el.value.toString().replace(/[^0-9]/g, '');
-  const v = raw.slice(-1);
+
+function otpInput(el, num) {
+  const v = el.value.replace(/[^0-9]/g,'').slice(-1);
   el.value = v;
   el.classList.toggle('filled', v !== '');
-  if(v && num < 4) document.getElementById('pin-'+(num+1)).focus();
-  if(num===4 && v) confirmarPin();
-}
-function pinKeydown(e, num){
-  if(e.key==='Backspace' && !document.getElementById('pin-'+num).value && num > 1){
-    document.getElementById('pin-'+(num-1)).focus();
+  if (v && num < 6) {
+    const next = document.getElementById('otp-' + (num + 1));
+    if (next) next.focus();
   }
-}
-function pinNuevoInput(el, num){
-  const v = el.value.toString().slice(-1);
-  el.value = v;
-  el.classList.toggle('filled', v !== '');
-  if(v && num < 4) document.getElementById('pin-n'+(num+1)).focus();
-  if(num===4 && v) registrarConPin();
-}
-function pinNuevoKeydown(e, num){
-  if(e.key==='Backspace' && !document.getElementById('pin-n'+num).value && num > 1){
-    document.getElementById('pin-n'+(num-1)).focus();
-  }
-}
-function mostrarLoginStep(stepId){
-  document.querySelectorAll('.login-step').forEach(s=>s.classList.remove('active'));
-  document.getElementById(stepId).classList.add('active');
-}
-function volverAlTelefono(){
-  mostrarLoginStep('login-step-tel');
-}
-function mostrarRecuperacion(){
-  showToast('📱 Contacta soporte en cierralo.mx para recuperar tu PIN');
+  if (num === 6 && v) verificarOTP();
 }
 
-async function loadVendedor(){
-  // Capturar userId localmente — currentUser puede cambiar durante operaciones async
-  const userId = currentUser?.id;
-  if(!userId){ console.warn('loadVendedor: sin userId'); return; }
+function otpKeydown(e, num) {
+  if (e.key === 'Backspace') {
+    const el = document.getElementById('otp-' + num);
+    if (el && !el.value && num > 1) {
+      const prev = document.getElementById('otp-' + (num - 1));
+      if (prev) prev.focus();
+    }
+  }
+}
+
+function iniciarContadorReenvio() {
+  let seg = 60;
+  const btn = document.getElementById('btn-reenviar-otp');
+  if (!btn) return;
+  btn.disabled = true;
+  clearInterval(_reenvioInterval);
+  _reenvioInterval = setInterval(() => {
+    seg--;
+    btn.textContent = `Reenviar (${seg}s)`;
+    if (seg <= 0) {
+      clearInterval(_reenvioInterval);
+      btn.textContent = 'Reenviar código';
+      btn.disabled = false;
+    }
+  }, 1000);
+}
+
+async function reenviarOTP() {
+  const telefono = _loginTelefono || localStorage.getItem('cierralo_otp_tel');
+  if (!telefono) return;
+  const { error } = await sb.auth.signInWithOtp({ phone: telefono });
+  if (error) { showToast('❌ ' + error.message); return; }
+  showToast('📱 Nuevo código enviado');
+  limpiarOtp();
+  iniciarContadorReenvio();
+  setTimeout(() => { const el = document.getElementById('otp-1'); if (el) el.focus(); }, 100);
+}
+
+// ════════════════════════════════════════════════════════
+// HELPERS — PIN
+// ════════════════════════════════════════════════════════
+function getPinValue(id1, id2, id3, id4) {
+  return [id1, id2, id3, id4].map(id => {
+    const raw = (document.getElementById(id)?.value || '').toString();
+    return raw.replace(/[^0-9]/g,'').slice(-1);
+  }).join('');
+}
+
+function limpiarPin(id1, id2, id3, id4) {
+  [id1, id2, id3, id4].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) { el.value = ''; el.classList.remove('filled'); }
+  });
+}
+
+function pinInput(el, num) {
+  const v = el.value.replace(/[^0-9]/g,'').slice(-1);
+  el.value = v;
+  el.classList.toggle('filled', v !== '');
+  if (v && num < 4) {
+    const next = document.getElementById('pin-' + (num + 1));
+    if (next) next.focus();
+  }
+  if (num === 4 && v) confirmarPin();
+}
+
+function pinKeydown(e, num) {
+  if (e.key === 'Backspace') {
+    const el = document.getElementById('pin-' + num);
+    if (el && !el.value && num > 1) {
+      const prev = document.getElementById('pin-' + (num - 1));
+      if (prev) prev.focus();
+    }
+  }
+}
+
+function pinNuevoInput(el, num) {
+  const v = el.value.toString().replace(/[^0-9]/g,'').slice(-1);
+  el.value = v;
+  el.classList.toggle('filled', v !== '');
+  if (v && num < 4) {
+    const next = document.getElementById('pin-n' + (num + 1));
+    if (next) next.focus();
+  }
+}
+
+function pinNuevoKeydown(e, num) {
+  if (e.key === 'Backspace') {
+    const el = document.getElementById('pin-n' + num);
+    if (el && !el.value && num > 1) {
+      const prev = document.getElementById('pin-n' + (num - 1));
+      if (prev) prev.focus();
+    }
+  }
+}
+
+// ════════════════════════════════════════════════════════
+// CARGAR DATOS DEL VENDEDOR
+// ════════════════════════════════════════════════════════
+async function loadVendedor() {
+  const userId = currentUser?.id || window._currentUid;
+  if (!userId) { console.warn('[Auth] loadVendedor: sin userId'); return; }
+
   try {
-    const {data, error}=await sb.from('vendedores').select('*').eq('id',userId).maybeSingle();
-    if(error) console.error('Error cargando vendedor:', error);
+    const { data, error } = await sbAuth().from('vendedores')
+      .select('*').eq('id', userId).maybeSingle();
 
-    if(data && data.onboarding_completo){
-      vendedorData=data;
+    if (error && error.code !== 'PGRST116') {
+      console.error('[Auth] Error cargando vendedor:', error);
+    }
+
+    if (data && data.onboarding_completo) {
+      vendedorData = data;
       populateApp();
       showPage('app');
       await cargarProspectos(userId);
       await cargarAutos(userId);
-      // Disparar evento para que el motor de alertas arranque con datos listos
       window.dispatchEvent(new CustomEvent('cierralo:datosListos'));
-    } else if(data){
-      vendedorData=data;
+
+    } else if (data) {
+      // Tiene registro pero no terminó onboarding
+      vendedorData = data;
+      _preLlenarNombreGoogle();
       showPage('onboarding');
+
     } else {
-      // Crear vendedor nuevo
-      // El teléfono real está en _loginTelefono (guardado durante el login)
-      const telefonoReal = _loginTelefono || currentUser?.email;
-      const {data:nuevo, error:errInsert}=await sb.from('vendedores')
-        .insert({id:userId, telefono:telefonoReal, onboarding_completo:false})
+      // Usuario nuevo — crear registro
+      const esGoogle    = currentUser?.app_metadata?.provider === 'google';
+      const emailReal   = esGoogle ? (currentUser?.email || null) : null;
+      const telefonoReg = _loginTelefono
+        || currentUser?.phone
+        || localStorage.getItem('cierralo_otp_tel')
+        || '';
+
+      const { data: nuevo, error: errInsert } = await sbAuth().from('vendedores')
+        .insert({
+          id:                  userId,
+          telefono:            telefonoReg,
+          email:               emailReal,
+          plan:                'free',
+          onboarding_completo: false
+        })
         .select().single();
-      if(errInsert) console.error('Error creando vendedor:', errInsert);
-      vendedorData = nuevo || {id:currentUser.id, telefono:telefonoReal, onboarding_completo:false};
+
+      if (errInsert) {
+        console.error('[Auth] Error creando vendedor:', errInsert);
+        // Si es duplicado (ya existe), cargar el existente
+        if (errInsert.code === '23505') {
+          const { data: reintento } = await sbAuth().from('vendedores')
+            .select('*').eq('id', userId).maybeSingle();
+          if (reintento) {
+            vendedorData = reintento;
+            if (reintento.onboarding_completo) {
+              populateApp(); showPage('app');
+              await cargarProspectos(userId);
+              await cargarAutos(userId);
+            } else {
+              _preLlenarNombreGoogle();
+              showPage('onboarding');
+            }
+            return;
+          }
+        }
+      }
+
+      vendedorData = nuevo || {
+        id: userId, telefono: telefonoReg, email: emailReal,
+        onboarding_completo: false, plan: 'free'
+      };
+
+      _preLlenarNombreGoogle();
       showPage('onboarding');
     }
-  } catch(e) {
-    console.error('Error en loadVendedor:', e);
-    // Solo ir a onboarding si realmente no hay datos — no por errores de JS posteriores
-    if(!vendedorData) {
-      showPage('onboarding');
-      vendedorData = {id:currentUser?.id, telefono:currentUser?.email, onboarding_completo:false};
+
+  } catch (e) {
+    console.error('[Auth] Error en loadVendedor:', e);
+    if (!vendedorData) {
+      vendedorData = { id: userId, onboarding_completo: false, plan: 'free' };
     }
-    // Si vendedorData existe, ya estamos en la app — ignorar el error secundario
+    showPage('onboarding');
   }
 }
 
-function obNext1(){
-  const nombre=document.getElementById('ob-nombre').value.trim();
-  const agencia=document.getElementById('ob-agencia').value.trim();
-  if(!nombre){showToast('⚠️ Escribe tu nombre');return;}
-  if(!agencia){showToast('⚠️ Escribe tu agencia');return;}
-  // Guardar en memoria aunque vendedorData sea básico
-  if(!vendedorData) vendedorData={};
-  vendedorData.nombre=nombre;
-  vendedorData.agencia=agencia;
-  document.getElementById('ob-step1').style.display='none';
-  document.getElementById('ob-step2').style.display='block';
+// Pre-llenar nombre si viene de Google
+function _preLlenarNombreGoogle() {
+  const nombreCompleto = currentUser?.user_metadata?.full_name || currentUser?.user_metadata?.name || '';
+  if (nombreCompleto) {
+    const el = document.getElementById('ob-nombre');
+    if (el && !el.value) el.value = nombreCompleto;
+  }
 }
 
-function selectMeta(el,val){
-  document.querySelectorAll('#ob-meta-opts .ob-opt').forEach(o=>o.classList.remove('selected'));
-  el.classList.add('selected'); obMeta=val;
-  const btn=document.getElementById('ob-btn2');
-  btn.style.background='var(--orange)'; btn.style.color='white';
+// ════════════════════════════════════════════════════════
+// ONBOARDING
+// ════════════════════════════════════════════════════════
+function obNext1() {
+  const nombre  = document.getElementById('ob-nombre')?.value.trim() || '';
+  const agencia = document.getElementById('ob-agencia')?.value.trim() || '';
+  if (!nombre)  { showToast('⚠️ Escribe tu nombre'); return; }
+  if (!agencia) { showToast('⚠️ Escribe tu agencia'); return; }
+  if (!vendedorData) vendedorData = {};
+  vendedorData.nombre  = nombre;
+  vendedorData.agencia = agencia;
+  document.getElementById('ob-step1').style.display = 'none';
+  document.getElementById('ob-step2').style.display = 'block';
 }
 
-function obNext2(){
-  if(!obMeta) return;
-  vendedorData.meta_mensual=obMeta;
-  document.getElementById('ob-step2').style.display='none';
-  document.getElementById('ob-step3').style.display='block';
+function selectMeta(el, val) {
+  document.querySelectorAll('#ob-meta-opts .ob-opt').forEach(o => o.classList.remove('selected'));
+  el.classList.add('selected');
+  obMeta = val;
+  const btn = document.getElementById('ob-btn2');
+  if (btn) { btn.style.background = 'var(--orange)'; btn.style.color = 'white'; }
 }
 
-function selectProblema(el,val){
-  document.querySelectorAll('#ob-step3 .ob-opt').forEach(o=>o.classList.remove('selected'));
-  el.classList.add('selected'); obProblema=val;
-  const btn=document.getElementById('ob-btn3');
-  btn.style.background='var(--orange)'; btn.style.color='white';
+function obNext2() {
+  if (!obMeta) return;
+  if (!vendedorData) vendedorData = {};
+  vendedorData.meta_mensual = obMeta;
+  document.getElementById('ob-step2').style.display = 'none';
+  document.getElementById('ob-step3').style.display = 'block';
 }
 
-async function obFinish(){
-  if(!obProblema) return;
-  const btn=document.getElementById('ob-btn3');
-  btn.textContent='Guardando...'; btn.disabled=true;
+function selectProblema(el, val) {
+  document.querySelectorAll('#ob-step3 .ob-opt').forEach(o => o.classList.remove('selected'));
+  el.classList.add('selected');
+  obProblema = val;
+  const btn = document.getElementById('ob-btn3');
+  if (btn) { btn.style.background = 'var(--orange)'; btn.style.color = 'white'; }
+}
+
+async function obFinish() {
+  if (!obProblema) return;
+  const btn = document.getElementById('ob-btn3');
+  if (btn) { btn.textContent = 'Guardando...'; btn.disabled = true; }
+
+  const uid = currentUser?.id || window._currentUid;
 
   const datosGuardar = {
-    nombre: vendedorData?.nombre || '',
-    agencia: vendedorData?.agencia || '',
-    meta_mensual: obMeta || 10,
-    problema_principal: obProblema,
+    nombre:              vendedorData?.nombre  || '',
+    agencia:             vendedorData?.agencia || '',
+    meta_mensual:        obMeta    || 10,
+    problema_principal:  obProblema,
     onboarding_completo: true,
-    ultimo_acceso: new Date().toISOString()
+    plan:                vendedorData?.plan || 'free',
+    ultimo_acceso:       new Date().toISOString()
   };
 
-  // Intentar UPDATE primero
-  const {error:errUpdate} = await sb.from('vendedores')
-    .update(datosGuardar)
-    .eq('id', currentUser.id);
+  // Guardar email capturado si es usuario SMS
+  const emailCapturado = document.getElementById('ob-email')?.value.trim();
+  if (emailCapturado) datosGuardar.email = emailCapturado;
 
-  if(errUpdate){
-    // Si falla el update, intentar UPSERT
-    const {error:errUpsert} = await sb.from('vendedores')
-      .upsert({id: currentUser.id, telefono: currentUser.email, ...datosGuardar});
-    if(errUpsert){
-      showToast('❌ Error: '+errUpsert.message);
-      btn.textContent='¡Empezar a vender! 🚀';
-      btn.disabled=false;
+  const { error: errUpdate } = await sbAuth().from('vendedores')
+    .update(datosGuardar).eq('id', uid);
+
+  if (errUpdate) {
+    // Intentar upsert como fallback
+    const { error: errUpsert } = await sbAuth().from('vendedores').upsert({
+      id: uid,
+      telefono: _loginTelefono || vendedorData?.telefono || '',
+      ...datosGuardar
+    });
+    if (errUpsert) {
+      showToast('❌ Error: ' + errUpsert.message);
+      if (btn) { btn.textContent = '¡Empezar a vender! 🚀'; btn.disabled = false; }
       return;
     }
   }
 
-  // Actualizar datos locales
-  if(!vendedorData) vendedorData = {};
+  if (!vendedorData) vendedorData = {};
   Object.assign(vendedorData, datosGuardar);
+  if (btn) { btn.textContent = '¡Empezar a vender! 🚀'; btn.disabled = false; }
   populateApp();
   showPage('app');
-  // Cargar datos reales
-  await cargarProspectos();
-  await cargarAutos();
-  mostrarWrappedBanner();
+  await cargarProspectos(uid);
+  await cargarAutos(uid);
+  if (typeof mostrarWrappedBanner === 'function') mostrarWrappedBanner();
 }
 
-function populateApp(){
-  if(!vendedorData) return;
-  // Cerrar modales que pudieran haber quedado abiertos de sesión anterior
-  document.querySelectorAll('.modal-overlay, .confirm-overlay, .modal-metodo').forEach(m => m.classList.remove('open'));
-  const nombre=vendedorData.nombre||'Vendedor';
-  const iniciales=nombre.split(' ').map(n=>n[0]).join('').substring(0,2).toUpperCase();
-  const meta=vendedorData.meta_mensual||10;
-  document.querySelectorAll('#app-avatar,#perfil-av').forEach(el=>el.textContent=iniciales);
-  const el=id=>document.getElementById(id);
-  if(el('dash-nombre')) el('dash-nombre').textContent=nombre+' 👋';
-  if(el('dash-sub')) el('dash-sub').textContent='Bienvenido a Ciérralo.mx — tu asistente está listo';
-  if(el('dash-meta')) el('dash-meta').textContent=meta;
-  if(el('perfil-nombre')) el('perfil-nombre').textContent=nombre;
-  if(el('perfil-agencia')) el('perfil-agencia').textContent=vendedorData.agencia||'—';
-  if(el('perfil-email-item')) el('perfil-email-item').textContent=vendedorData.telefono||currentUser?.email||'—';
-  if(el('perfil-meta-item')) el('perfil-meta-item').textContent=meta+' unidades este mes';
-  renderSemaforoWA();
-  renderPerfilPublico();
-  if(typeof actualizarCardPlan === 'function') actualizarCardPlan();
+// ════════════════════════════════════════════════════════
+// POPULATE APP — llenar UI con datos del vendedor
+// ════════════════════════════════════════════════════════
+function populateApp() {
+  if (!vendedorData) return;
+
+  // Cerrar modales al entrar a la app
+  document.querySelectorAll('.modal-overlay, .confirm-overlay, .modal-metodo').forEach(m => {
+    m.classList.remove('open');
+  });
+
+  const nombre    = vendedorData.nombre || 'Vendedor';
+  const iniciales = nombre.split(' ').map(n => n[0]).join('').substring(0,2).toUpperCase();
+  const meta      = vendedorData.meta_mensual || 10;
+
+  document.querySelectorAll('#app-avatar, #perfil-av').forEach(el => el.textContent = iniciales);
+
+  const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+  set('dash-nombre', nombre + ' 👋');
+  set('dash-sub',    'Bienvenido a Ciérralo.mx — tu asistente está listo');
+  set('dash-meta',   meta);
+  set('perfil-nombre',  nombre);
+  set('perfil-agencia', vendedorData.agencia || '—');
+  set('perfil-email-item',
+    vendedorData.telefono || vendedorData.email || currentUser?.email || '—');
+  set('perfil-meta-item', meta + ' unidades este mes');
+
+  if (typeof renderSemaforoWA     === 'function') renderSemaforoWA();
+  if (typeof renderPerfilPublico  === 'function') renderPerfilPublico();
+  if (typeof actualizarCardPlan   === 'function') actualizarCardPlan();
 }
 
-
-async function signOut(){
-  window._signOutExplicito = true; // Marcar que es logout real del usuario
+// ════════════════════════════════════════════════════════
+// SIGN OUT
+// ════════════════════════════════════════════════════════
+async function signOut() {
+  window._signOutExplicito = true;
   localStorage.removeItem('cierralo_session');
-  appIniciada = false;
-  currentUser = null;
+  localStorage.removeItem('cierralo_otp_tel');
+  appIniciada  = false;
+  currentUser  = null;
   vendedorData = null;
-  obMeta = null;
-  obProblema = null;
+  obMeta       = null;
+  obProblema   = null;
   await sb.auth.signOut();
   showPage('login');
-  mostrarLoginStep('login-step-tel');
+  mostrarLoginStep('login-step-inicio');
 }
 
-
-// Enter en campo teléfono login → confirmar PIN
-// Enter en campo teléfono login → confirmar PIN
-document.getElementById('login-tel').addEventListener('keydown',e=>{if(e.key==='Enter')confirmarPin();});
-
-
-
-// ═══════════════════════════════════════
-// RECUPERACIÓN DE PIN — Sesión 7
-// ═══════════════════════════════════════
-
+// ════════════════════════════════════════════════════════
+// RECUPERACIÓN DE PIN (legacy)
+// ════════════════════════════════════════════════════════
 let _recoveryTelefono = '';
 
-function mostrarRecuperacion(){
+function mostrarRecuperacion() {
   _recoveryTelefono = '';
   const telEl = document.getElementById('recovery-tel');
-  if(telEl) telEl.value = '';
+  if (telEl) telEl.value = '';
   limpiarPin('rpin-1','rpin-2','rpin-3','rpin-4');
   limpiarPin('rpin-c1','rpin-c2','rpin-c3','rpin-c4');
   mostrarLoginStep('login-step-recovery-tel');
-  setTimeout(() => { if(telEl) telEl.focus(); }, 100);
+  setTimeout(() => { if (telEl) telEl.focus(); }, 100);
 }
 
-async function verificarTelRecuperacion(){
-  const tel = document.getElementById('recovery-tel').value.replace(/\s/g,'').trim();
-  if(tel.length < 8){ showToast('⚠️ Ingresa tu número de WhatsApp'); return; }
+async function verificarTelRecuperacion() {
+  const telEl = document.getElementById('recovery-tel');
+  if (!telEl) return;
+  const raw = telEl.value.replace(/[\s\-]/g,'').replace(/[^0-9]/g,'');
+  if (raw.length < 8) { showToast('⚠️ Ingresa tu número'); return; }
+  _recoveryTelefono = '+52' + raw.replace(/^52/,'');
 
-  _recoveryTelefono = '+52' + tel.replace(/^\+52/,'');
   const btn = document.getElementById('recovery-tel-btn');
-  btn.textContent = 'Verificando...'; btn.disabled = true;
+  if (btn) { btn.textContent = 'Verificando...'; btn.disabled = true; }
 
-  // Verificar que el número existe en la base de datos
-  const { data, error } = await sb
-    .from('vendedores')
-    .select('id, nombre')
-    .eq('telefono', _recoveryTelefono)
-    .single();
+  const { data, error } = await sb.from('vendedores')
+    .select('id, nombre').eq('telefono', _recoveryTelefono).single();
 
-  btn.textContent = 'Continuar →'; btn.disabled = false;
+  if (btn) { btn.textContent = 'Continuar →'; btn.disabled = false; }
 
-  if(error || !data){
+  if (error || !data) {
     showToast('❌ No encontramos una cuenta con ese número.');
     return;
   }
 
-  // Número encontrado — pasar a elegir nuevo PIN
   limpiarPin('rpin-1','rpin-2','rpin-3','rpin-4');
   limpiarPin('rpin-c1','rpin-c2','rpin-c3','rpin-c4');
   mostrarLoginStep('login-step-recovery-pin');
-  setTimeout(() => document.getElementById('rpin-1').focus(), 100);
+  setTimeout(() => { const el = document.getElementById('rpin-1'); if (el) el.focus(); }, 100);
 }
 
-async function cambiarPin(){
-  const pin = getPinValue('rpin-1','rpin-2','rpin-3','rpin-4');
+async function cambiarPin() {
+  const pin     = getPinValue('rpin-1','rpin-2','rpin-3','rpin-4');
   const pinConf = getPinValue('rpin-c1','rpin-c2','rpin-c3','rpin-c4');
 
-  if(pin.length < 4){ showToast('⚠️ Ingresa los 4 dígitos del nuevo PIN'); return; }
-  if(pin !== pinConf){ 
-    showToast('❌ Los PINs no coinciden. Intenta de nuevo.');
+  if (pin.length < 4) { showToast('⚠️ Ingresa el nuevo PIN de 4 dígitos'); return; }
+  if (pin !== pinConf) {
+    showToast('❌ Los PINs no coinciden.');
     limpiarPin('rpin-c1','rpin-c2','rpin-c3','rpin-c4');
-    setTimeout(() => document.getElementById('rpin-c1').focus(), 100);
-    return; 
+    setTimeout(() => { const el = document.getElementById('rpin-c1'); if (el) el.focus(); }, 100);
+    return;
   }
 
   const btn = document.getElementById('recovery-pin-btn');
-  btn.textContent = 'Guardando...'; btn.disabled = true;
+  if (btn) { btn.textContent = 'Guardando...'; btn.disabled = true; }
 
-  const emailFake = 'tel' + _recoveryTelefono.replace('+','') + '@gmail.com';
+  const emailFake    = 'tel' + _recoveryTelefono.replace('+','') + '@gmail.com';
   const nuevaPassword = 'PIN_' + pin + '_' + _recoveryTelefono;
 
-  // Primero hacer signIn temporal con cualquier PIN para obtener sesión
-  // Usamos updateUser que requiere sesión activa — alternativa: Admin API
-  // Solución: usar signInWithOtp deshabilitado → usamos signUp para recrear
-  // Estrategia: intentar cambiar password via signIn + updateUser
-  // Si no hay sesión activa, usamos el flujo de "recrear" con signUp trick
-
-  // Intentar login con el email para obtener sesión
-  // No podemos porque no sabemos el PIN viejo — eso es precisamente el problema
-  // Solución: usar supabase.auth.admin NO disponible en cliente
-  // Solución correcta para PWA sin backend: 
-  //   1. signIn con email + password vacío para disparar reset
-  //   2. Usar resetPasswordForEmail — pero requiere magic link (PROHIBIDO)
-  // Solución definitiva: guardar hash del PIN en tabla vendedores
-  //   y actualizar en la tabla + en Supabase auth via updateUser con sesión admin
-
-  // IMPLEMENTACIÓN REAL: 
-  // Como no tenemos backend todavía, usamos el truco de signUp:
-  // Si el usuario ya existe y hacemos signUp, Supabase devuelve error "already registered"
-  // pero NO podemos cambiar el password sin el password anterior o magic link
-  // 
-  // Solución pragmática para beta: Netlify Function que usa Admin API
-  // Por ahora: flujo con signIn del PIN viejo no es posible
-  // Implementamos con Edge Function de Supabase que usa service_role
-
-  // Llamar a nuestra Edge Function de recuperación
   try {
     const resp = await fetch('https://nkjradximipkrzscgvhv.supabase.co/functions/v1/recuperar-pin', {
-      method: 'POST',
+      method:  'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ telefono: _recoveryTelefono, nuevo_pin: pin })
+      body:    JSON.stringify({ telefono: _recoveryTelefono, nuevo_pin: pin })
     });
-
     const result = await resp.json();
+    if (!resp.ok || result.error) throw new Error(result.error || 'Error al cambiar PIN');
 
-    if(!resp.ok || result.error){
-      throw new Error(result.error || 'Error al cambiar PIN');
-    }
-
-    // PIN cambiado — ahora hacer login con el nuevo PIN
     const { data: loginData, error: loginError } = await sb.auth.signInWithPassword({
-      email: emailFake,
-      password: nuevaPassword
+      email: emailFake, password: nuevaPassword
     });
+    if (loginError) throw loginError;
 
-    if(loginError) throw loginError;
-
+    window._authToken    = loginData.session.access_token;
+    window._refreshToken = loginData.session.refresh_token;
+    window._currentUid   = loginData.user.id;
     localStorage.setItem('cierralo_session', JSON.stringify({
-      access_token: loginData.session.access_token,
+      access_token:  loginData.session.access_token,
       refresh_token: loginData.session.refresh_token
     }));
-
     currentUser = loginData.user;
     appIniciada = true;
     showToast('✅ PIN actualizado — ¡Bienvenido de vuelta!');
     await loadVendedor();
-
-  } catch(err) {
+  } catch (err) {
     showToast('❌ Error al cambiar PIN. Intenta de nuevo.');
-    console.error('cambiarPin error:', err);
-    btn.textContent = 'Guardar nuevo PIN →'; btn.disabled = false;
+    console.error('[Auth] cambiarPin error:', err);
+    if (btn) { btn.textContent = 'Guardar nuevo PIN →'; btn.disabled = false; }
   }
 }
 
-// ── Helpers PIN recuperación ──
-function pinRecInput(el, num){
-  const v = el.value.toString().slice(-1);
-  el.value = v;
-  el.classList.toggle('filled', v !== '');
-  if(v && num < 4) document.getElementById('rpin-'+( num+1)).focus();
+// Helpers PIN recovery
+function pinRecInput(el, num) {
+  const v = el.value.toString().replace(/[^0-9]/g,'').slice(-1);
+  el.value = v; el.classList.toggle('filled', v !== '');
+  if (v && num < 4) { const n = document.getElementById('rpin-' + (num+1)); if (n) n.focus(); }
 }
-function pinRecKeydown(e, num){
-  if(e.key==='Backspace' && !document.getElementById('rpin-'+num).value && num > 1){
-    document.getElementById('rpin-'+(num-1)).focus();
+function pinRecKeydown(e, num) {
+  if (e.key === 'Backspace' && !(document.getElementById('rpin-'+num)?.value) && num > 1) {
+    const p = document.getElementById('rpin-'+(num-1)); if (p) p.focus();
   }
 }
-function pinRecConfInput(el, num){
-  const v = el.value.toString().slice(-1);
-  el.value = v;
-  el.classList.toggle('filled', v !== '');
-  if(v && num < 4){
-    const next = document.getElementById('rpin-c'+(num+1));
-    if(next) next.focus();
-  }
-  if(num === 4 && v) cambiarPin();
+function pinRecConfInput(el, num) {
+  const v = el.value.toString().replace(/[^0-9]/g,'').slice(-1);
+  el.value = v; el.classList.toggle('filled', v !== '');
+  if (v && num < 4) { const n = document.getElementById('rpin-c'+(num+1)); if (n) n.focus(); }
+  if (num === 4 && v) cambiarPin();
 }
-function pinRecConfKeydown(e, num){
-  if(e.key==='Backspace' && !document.getElementById('rpin-c'+num).value && num > 1){
-    document.getElementById('rpin-c'+(num-1)).focus();
+function pinRecConfKeydown(e, num) {
+  if (e.key === 'Backspace' && !(document.getElementById('rpin-c'+num)?.value) && num > 1) {
+    const p = document.getElementById('rpin-c'+(num-1)); if (p) p.focus();
   }
 }
+
+// Enter en campos de texto para avanzar
+document.addEventListener('DOMContentLoaded', () => {
+  const loginTelEl = document.getElementById('login-tel');
+  if (loginTelEl) loginTelEl.addEventListener('keydown', e => {
+    if (e.key === 'Enter') document.getElementById('pin-1')?.focus();
+  });
+
+  const smsTelEl = document.getElementById('sms-tel');
+  if (smsTelEl) smsTelEl.addEventListener('keydown', e => {
+    if (e.key === 'Enter') enviarOTP();
+  });
+});
