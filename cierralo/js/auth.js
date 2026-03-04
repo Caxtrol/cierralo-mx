@@ -18,34 +18,49 @@ window.addEventListener('load', async () => {
     if (!appIniciada) showPage('login');
   }, 5000);
 
-  // ── Detectar regreso de Google OAuth (token en hash de URL) ──
+  // ── Detectar regreso de Google OAuth ──
+  // PKCE manda ?code= en el query string — Supabase lo intercambia automáticamente
+  // con detectSessionInUrl: true en config.js
+  // Solo necesitamos limpiar la URL y dejar que onAuthStateChange maneje el SIGNED_IN
+  const searchParams = new URLSearchParams(window.location.search);
+  const oauthCode = searchParams.get('code');
+  if (oauthCode) {
+    console.log('[Auth] Código OAuth PKCE detectado — Supabase lo procesa automáticamente');
+    clearTimeout(fallback);
+    // Limpiar URL sin recargar (Supabase ya leyó el code)
+    window.history.replaceState(null, '', window.location.pathname);
+    // onAuthStateChange disparará SIGNED_IN cuando Supabase intercambie el code por token
+    // Damos 8 segundos para que complete el intercambio antes de mostrar login
+    window._fallbackOAuth = setTimeout(() => {
+      if (!appIniciada) {
+        document.getElementById('splash').classList.add('hidden');
+        showPage('login');
+        showToast('❌ No se pudo entrar con Google. Intenta de nuevo.');
+      }
+    }, 8000);
+    return;
+  }
+
+  // Flujo legacy: token en hash (por si acaso)
   const hash = window.location.hash;
   if (hash && hash.includes('access_token')) {
-    // Extraer el token del hash manualmente y establecer la sesión
     clearTimeout(fallback);
     const params = new URLSearchParams(hash.substring(1));
     const accessToken  = params.get('access_token');
     const refreshToken = params.get('refresh_token');
-
-    // Limpiar URL sin recargar
     window.history.replaceState(null, '', window.location.pathname);
-
     if (accessToken && refreshToken) {
       try {
-        const { data, error } = await sb.auth.setSession({
-          access_token:  accessToken,
-          refresh_token: refreshToken
-        });
+        const { error } = await sb.auth.setSession({ access_token: accessToken, refresh_token: refreshToken });
         if (error) throw error;
-        // setSession dispara SIGNED_IN en onAuthStateChange — él se encarga del resto
       } catch (e) {
-        console.error('[Auth] Error procesando token OAuth:', e);
+        console.error('[Auth] Error procesando token OAuth legacy:', e);
         document.getElementById('splash').classList.add('hidden');
         showPage('login');
         showToast('❌ Error al entrar con Google. Intenta de nuevo.');
       }
     }
-    return; // onAuthStateChange toma el control desde aquí
+    return;
   }
 
   // Hora del día en dashboard
@@ -117,38 +132,56 @@ window.addEventListener('load', async () => {
     return;
   }
 
-  // Intentar restaurar sesión desde la clave nativa de Supabase
+  // Intentar restaurar sesión — buscar refresh token en todas las claves posibles
   try {
-    const { data: { session }, error } = await sb.auth.getSession();
-    if (session?.user) {
-      // Supabase ya tiene sesión válida — onAuthStateChange disparará INITIAL_SESSION
-      console.log('[Auth] Sesión existente detectada:', session.user.id);
-      // No hacer nada — INITIAL_SESSION lo maneja
-    } else {
-      // No hay sesión guardada — intentar con refresh token si hay uno
-      const authRaw = localStorage.getItem('sb-nkjradximipkrzscgvhv-auth-token');
-      if (authRaw) {
-        try {
-          const authData = JSON.parse(authRaw);
-          const refreshToken = authData?.refresh_token || authData?.[0]?.refresh_token;
-          if (refreshToken) {
-            const { error: rErr } = await sb.auth.refreshSession({ refresh_token: refreshToken });
-            if (rErr) {
-              console.warn('[Auth] refreshSession falló:', rErr.message);
-              lanzarLogin(fallback);
-            }
-            // Si ok, SIGNED_IN se dispara automáticamente
-          } else {
-            lanzarLogin(fallback);
-          }
-        } catch(e) {
-          lanzarLogin(fallback);
+    // Buscar en todas las claves que Supabase puede usar (varía entre PC y móvil)
+    let refreshToken = null;
+
+    // Clave principal en PC
+    const authRaw = localStorage.getItem('sb-nkjradximipkrzscgvhv-auth-token');
+    if (authRaw) {
+      try {
+        const authData = JSON.parse(authRaw);
+        refreshToken = authData?.refresh_token
+          || authData?.[0]?.refresh_token
+          || authData?.data?.refresh_token;
+      } catch(e) {}
+    }
+
+    // Buscar en otras claves si no encontramos (móvil puede usar diferente clave)
+    if (!refreshToken) {
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && (key.includes('supabase') || key.includes('nkjradximipkrzscgvhv'))) {
+          try {
+            const val = JSON.parse(localStorage.getItem(key));
+            const rt = val?.refresh_token || val?.[0]?.refresh_token || val?.data?.refresh_token;
+            if (rt) { refreshToken = rt; break; }
+          } catch(e) {}
         }
+      }
+    }
+
+    if (refreshToken) {
+      console.log('[Auth] Refresh token encontrado — restaurando sesión');
+      const { error: rErr } = await sb.auth.refreshSession({ refresh_token: refreshToken });
+      if (rErr) {
+        console.warn('[Auth] refreshSession falló:', rErr.message);
+        lanzarLogin(fallback);
+      }
+      // Si ok, onAuthStateChange dispara SIGNED_IN automáticamente
+    } else {
+      // Sin refresh token — verificar si getSession tiene algo
+      const { data: { session } } = await sb.auth.getSession();
+      if (session?.user) {
+        console.log('[Auth] Sesión activa encontrada via getSession');
+        // INITIAL_SESSION lo manejará
       } else {
         lanzarLogin(fallback);
       }
     }
   } catch(e) {
+    console.warn('[Auth] Error restaurando sesión:', e.message);
     lanzarLogin(fallback);
   }
 });
