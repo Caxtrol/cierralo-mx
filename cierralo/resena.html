@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+<meta name="theme-color" content="#09090F">
+<title>Deja tu reseña — Ciérralo.mx</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+:root{
+  --bg:#09090F;--s1:#111118;--s2:#18181F;--s3:#202029;
+  --border:#2E2E42;--border2:#3A3A52;
+  --orange:#FF6B35;--orangeBg:#FF6B3514;
+  --green:#22C55E;--greenBg:#22C55E14;
+  --yellow:#F59E0B;--yellowBg:#F59E0B14;
+  --text:#F0F0FA;--text2:#9090B0;--text3:#58587A;
+  --r:16px;--rs:10px;
+}
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;display:flex;flex-direction:column;}
+
+.topbar{display:flex;align-items:center;justify-content:center;padding:14px 20px;border-bottom:1px solid var(--border);}
+.topbar-logo{font-family:'Syne',sans-serif;font-size:18px;font-weight:800;}
+.topbar-logo span{color:var(--orange);}
+
+.container{max-width:480px;margin:0 auto;padding:24px 20px;flex:1;}
+
+/* ── VENDEDOR INFO ── */
+.vendor-card{background:var(--s1);border:1px solid var(--border);border-radius:var(--r);padding:16px;display:flex;align-items:center;gap:14px;margin-bottom:24px;}
+.vendor-av{width:52px;height:52px;border-radius:50%;background:linear-gradient(135deg,var(--orange),#CC4A1A);display:flex;align-items:center;justify-content:center;font-family:'Syne',sans-serif;font-weight:800;font-size:18px;color:white;flex-shrink:0;}
+.vendor-name{font-family:'Syne',sans-serif;font-size:16px;font-weight:700;color:var(--text);margin-bottom:2px;}
+.vendor-agency{font-size:12px;color:var(--text2);}
+.vendor-badge{display:inline-flex;align-items:center;gap:4px;font-size:10px;font-weight:700;padding:3px 8px;border-radius:20px;background:var(--greenBg);color:var(--green);border:1px solid #22C55E30;margin-top:4px;}
+
+/* ── FORM ── */
+.form-title{font-family:'Syne',sans-serif;font-size:20px;font-weight:800;color:var(--text);margin-bottom:6px;}
+.form-sub{font-size:13px;color:var(--text2);margin-bottom:24px;line-height:1.5;}
+
+.field-label{font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;}
+
+/* ── ESTRELLAS ── */
+.stars-row{display:flex;gap:10px;margin-bottom:20px;}
+.star{font-size:36px;cursor:pointer;transition:all .15s;opacity:.3;filter:grayscale(1);}
+.star.active{opacity:1;filter:none;transform:scale(1.1);}
+.star:hover{opacity:.8;filter:none;}
+.stars-label{font-size:13px;color:var(--text2);margin-top:6px;min-height:18px;}
+
+/* ── RECOMIENDA ── */
+.rec-row{display:flex;gap:10px;margin-bottom:20px;}
+.rec-btn{flex:1;padding:12px;border-radius:var(--rs);border:2px solid var(--border);background:var(--s2);cursor:pointer;text-align:center;transition:all .2s;}
+.rec-btn.active-yes{border-color:var(--green);background:var(--greenBg);}
+.rec-btn.active-no{border-color:#EF4444;background:#EF444414;}
+.rec-icon{font-size:22px;margin-bottom:4px;}
+.rec-lbl{font-size:12px;font-weight:600;color:var(--text2);}
+.rec-btn.active-yes .rec-lbl{color:var(--green);}
+.rec-btn.active-no .rec-lbl{color:#EF4444;}
+
+/* ── INPUTS ── */
+.field-input{width:100%;background:var(--s2);border:1px solid var(--border);border-radius:var(--rs);padding:12px 14px;font-family:'DM Sans',sans-serif;font-size:14px;color:var(--text);outline:none;transition:border .2s;margin-bottom:16px;}
+.field-input:focus{border-color:var(--orange);}
+.field-input::placeholder{color:var(--text3);}
+textarea.field-input{resize:none;min-height:100px;line-height:1.5;}
+
+/* ── AUTO ── */
+.auto-row{display:flex;gap:8px;margin-bottom:16px;}
+.auto-row .field-input{margin-bottom:0;}
+
+/* ── ANONIMA ── */
+.check-row{display:flex;align-items:center;gap:10px;margin-bottom:24px;cursor:pointer;}
+.check-box{width:20px;height:20px;border-radius:5px;border:2px solid var(--border);background:var(--s2);flex-shrink:0;display:flex;align-items:center;justify-content:center;transition:all .2s;}
+.check-box.checked{background:var(--orange);border-color:var(--orange);}
+.check-lbl{font-size:13px;color:var(--text2);}
+
+/* ── BOTÓN ── */
+.btn-submit{width:100%;background:var(--orange);color:white;font-family:'Syne',sans-serif;font-weight:700;font-size:15px;padding:14px;border-radius:var(--rs);border:none;cursor:pointer;transition:all .15s;display:flex;align-items:center;justify-content:center;gap:8px;}
+.btn-submit:active{transform:scale(.98);}
+.btn-submit:disabled{opacity:.5;cursor:not-allowed;}
+
+/* ── ESTADOS ── */
+.loading-state{text-align:center;padding:60px 20px;}
+.loading-dots{display:flex;gap:8px;justify-content:center;margin-bottom:12px;}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--orange);animation:pulse 1.2s ease-in-out infinite;}
+.dot:nth-child(2){animation-delay:.2s;}
+.dot:nth-child(3){animation-delay:.4s;}
+@keyframes pulse{0%,100%{opacity:.3;transform:scale(.8);}50%{opacity:1;transform:scale(1.2);}}
+
+.success-state{text-align:center;padding:40px 20px;}
+.success-icon{font-size:64px;margin-bottom:16px;}
+.success-title{font-family:'Syne',sans-serif;font-size:22px;font-weight:800;color:var(--green);margin-bottom:8px;}
+.success-sub{font-size:14px;color:var(--text2);line-height:1.6;margin-bottom:24px;}
+.success-profile-btn{display:inline-block;background:var(--s2);color:var(--text2);font-family:'Syne',sans-serif;font-weight:700;font-size:12px;padding:10px 20px;border-radius:var(--rs);text-decoration:none;border:1px solid var(--border);}
+
+.error-state{text-align:center;padding:60px 20px;}
+.error-icon{font-size:48px;margin-bottom:12px;}
+.error-title{font-family:'Syne',sans-serif;font-size:18px;font-weight:700;margin-bottom:6px;}
+.error-sub{font-size:13px;color:var(--text2);}
+
+@keyframes fadeUp{from{opacity:0;transform:translateY(12px);}to{opacity:1;transform:translateY(0);}}
+.fade-up{animation:fadeUp .35s ease forwards;}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-logo">Ciérralo<span>.mx</span></div>
+</div>
+
+<div class="container" id="main">
+  <div class="loading-state">
+    <div class="loading-dots">
+      <div class="dot"></div><div class="dot"></div><div class="dot"></div>
+    </div>
+    <div style="font-size:12px;color:var(--text3);">Cargando...</div>
+  </div>
+</div>
+
+<script>
+const SUPABASE_URL = 'https://nkjradximipkrzscgvhv.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_53Uf0nvrDI8I0iVRqgDA7g_4RJDPl3j';
+const { createClient } = supabase;
+const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
+
+let vendedor = null;
+let calificacion = 0;
+let recomienda = true;
+let anonima = false;
+
+// ── Leer token de la URL ──
+function getToken(){
+  const path = window.location.pathname;
+  const partes = path.split('/').filter(Boolean);
+  if(partes.length >= 2 && partes[0] === 'resena') return partes[1];
+  return new URLSearchParams(window.location.search).get('t') || '';
+}
+
+// ── Fingerprint básico del dispositivo ──
+// Combina características del navegador para identificar el dispositivo
+// sin guardar datos personales — solo un hash anónimo
+function getDeviceFingerprint(){
+  const data = [
+    navigator.userAgent,
+    navigator.language,
+    screen.width + 'x' + screen.height,
+    screen.colorDepth,
+    new Date().getTimezoneOffset(),
+    navigator.hardwareConcurrency || '',
+    navigator.platform || '',
+  ].join('|');
+  // Hash simple (no criptográfico, solo para identificar dispositivo)
+  let hash = 0;
+  for(let i = 0; i < data.length; i++){
+    const char = data.charCodeAt(i);
+    hash = ((hash << 5) - hash) + char;
+    hash = hash & hash;
+  }
+  return Math.abs(hash).toString(36);
+}
+
+async function init(){
+  const token = getToken();
+  const main = document.getElementById('main');
+
+  if(!token){
+    main.innerHTML = `
+      <div class="error-state">
+        <div class="error-icon">🔗</div>
+        <div class="error-title">Link inválido</div>
+        <div class="error-sub">Este link de reseña no es válido. Pide al vendedor que te mande el link correcto.</div>
+      </div>`;
+    return;
+  }
+
+  // Validar token via Edge Function (sin exponer datos con RLS)
+  let resultado;
+  try {
+    const res = await fetch('https://nkjradximipkrzscgvhv.supabase.co/functions/v1/validar-token-resena', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token })
+    });
+    resultado = await res.json();
+
+    if(!res.ok || resultado.error){
+      const msgs = {
+        409: { icon: '✅', titulo: 'Reseña ya registrada',   sub: resultado.error },
+        410: { icon: '⏰', titulo: 'Link expirado',          sub: resultado.error },
+        403: { icon: '⚠️', titulo: 'Link no disponible',     sub: resultado.error },
+        404: { icon: '🔗', titulo: 'Link inválido',          sub: resultado.error || 'Este link no es válido. Pide al vendedor uno nuevo.' },
+      };
+      const m = msgs[res.status] || msgs[404];
+      main.innerHTML = `
+        <div class="error-state">
+          <div class="error-icon">${m.icon}</div>
+          <div class="error-title">${m.titulo}</div>
+          <div class="error-sub">${m.sub}</div>
+        </div>`;
+      return;
+    }
+  } catch(e) {
+    main.innerHTML = `
+      <div class="error-state">
+        <div class="error-icon">📡</div>
+        <div class="error-title">Error de conexión</div>
+        <div class="error-sub">Verifica tu internet e intenta de nuevo.</div>
+      </div>`;
+    return;
+  }
+
+  vendedor = { ...resultado.vendedor, prospecto_id: resultado.prospecto_id, auto_sugerido: resultado.auto_sugerido };
+  document.title = `Reseña para ${vendedor.nombre} — Ciérralo.mx`;
+  renderForm();
+}
+
+function renderForm(){
+  const iniciales = (vendedor.nombre||'VV').split(' ').map(n=>n[0]).join('').substring(0,2).toUpperCase();
+  
+  document.getElementById('main').innerHTML = `
+    <div class="vendor-card fade-up">
+      <div class="vendor-av">${iniciales}</div>
+      <div>
+        <div class="vendor-name">${vendedor.nombre}</div>
+        <div class="vendor-agency">${vendedor.agencia || ''} ${vendedor.ciudad ? '· '+vendedor.ciudad : ''}</div>
+        <div class="vendor-badge">✅ Vendedor verificado en Ciérralo.mx</div>
+      </div>
+    </div>
+
+    <div class="fade-up">
+      <div class="form-title">¿Cómo fue tu experiencia?</div>
+      <div class="form-sub">Tu reseña ayuda a otros compradores a encontrar vendedores de confianza. Solo toma 1 minuto.</div>
+
+      <div class="field-label">Tu calificación</div>
+      <div class="stars-row" id="stars-row">
+        <div class="star" onclick="setCalificacion(1)">⭐</div>
+        <div class="star" onclick="setCalificacion(2)">⭐</div>
+        <div class="star" onclick="setCalificacion(3)">⭐</div>
+        <div class="star" onclick="setCalificacion(4)">⭐</div>
+        <div class="star" onclick="setCalificacion(5)">⭐</div>
+      </div>
+      <div class="stars-label" id="stars-label">Toca para calificar</div>
+
+      <div style="height:20px;"></div>
+
+      <div class="field-label">¿Recomendarías a este vendedor?</div>
+      <div class="rec-row">
+        <div class="rec-btn active-yes" id="rec-si" onclick="setRecomienda(true)">
+          <div class="rec-icon">👍</div>
+          <div class="rec-lbl">Sí, lo recomiendo</div>
+        </div>
+        <div class="rec-btn" id="rec-no" onclick="setRecomienda(false)">
+          <div class="rec-icon">👎</div>
+          <div class="rec-lbl">No lo recomendaría</div>
+        </div>
+      </div>
+
+      <div class="field-label">¿Qué auto compraste o te interesó?</div>
+      <input class="field-input" type="text" id="auto-input" placeholder="Ej: Jetta 2024, Tucson, RAV4..." maxlength="60" value="${vendedor.auto_sugerido || ''}">
+
+      <div class="field-label">Tu comentario <span style="color:var(--text3);font-weight:400;text-transform:none;letter-spacing:0;">(opcional)</span></div>
+      <textarea class="field-input" id="comentario-input" placeholder="Cuéntanos cómo fue la atención, el proceso de compra, si cumplió lo prometido..." maxlength="500"></textarea>
+      <div style="text-align:right;font-size:10px;color:var(--text3);margin-top:-12px;margin-bottom:16px;" id="char-count">0 / 500</div>
+
+      <!-- Nombre del cliente -->
+      <div id="campo-nombre" style="margin-bottom:16px;">
+        <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;">TU NOMBRE</div>
+        <input id="inp-nombre" type="text" maxlength="60" placeholder="Ej: María González"
+          style="width:100%;background:var(--s2);border:1px solid var(--border);border-radius:10px;
+          padding:11px 14px;font-size:14px;color:var(--text);font-family:'DM Sans',sans-serif;outline:none;
+          -webkit-appearance:none;">
+        <div style="font-size:10px;color:var(--text3);margin-top:4px;">Aparecerá como "María G." en el perfil del vendedor</div>
+      </div>
+
+      <div class="check-row" onclick="toggleAnonima()">
+        <div class="check-box" id="check-anonima"></div>
+        <div class="check-lbl">Publicar como anónimo — nadie verá tu nombre</div>
+      </div>
+
+      <button class="btn-submit" id="btn-enviar" onclick="enviarResena()">
+        ⭐ Enviar reseña
+      </button>
+
+      <div style="font-size:10px;color:var(--text3);text-align:center;margin-top:12px;line-height:1.5;">
+        Tu reseña será visible en el perfil público del vendedor.<br>
+        Ciérralo.mx no comparte tu información personal.
+      </div>
+    </div>
+  `;
+
+  // Contador de caracteres
+  document.getElementById('comentario-input').addEventListener('input', function(){
+    document.getElementById('char-count').textContent = this.value.length + ' / 500';
+  });
+}
+
+const LABELS = ['', 'Mala experiencia', 'Regular', 'Buena atención', 'Muy buena atención', '¡Excelente vendedor!'];
+
+function setCalificacion(n){
+  calificacion = n;
+  const stars = document.querySelectorAll('.star');
+  stars.forEach((s,i) => s.classList.toggle('active', i < n));
+  document.getElementById('stars-label').textContent = LABELS[n];
+}
+
+function setRecomienda(val){
+  recomienda = val;
+  document.getElementById('rec-si').className = 'rec-btn' + (val ? ' active-yes' : '');
+  document.getElementById('rec-no').className = 'rec-btn' + (!val ? ' active-no' : '');
+}
+
+function toggleAnonima(){
+  anonima = !anonima;
+  document.getElementById('check-anonima').className = 'check-box' + (anonima ? ' checked' : '');
+  document.getElementById('check-anonima').textContent = anonima ? '✓' : '';
+  const campo = document.getElementById('campo-nombre');
+  if(campo) campo.style.display = anonima ? 'none' : 'block';
+}
+
+async function enviarResena(){
+  if(calificacion === 0){
+    document.getElementById('stars-label').textContent = '⚠️ Selecciona una calificación';
+    document.getElementById('stars-label').style.color = '#EF4444';
+    setTimeout(() => { document.getElementById('stars-label').style.color = ''; }, 2000);
+    return;
+  }
+
+  const comentario = document.getElementById('comentario-input').value.trim();
+  const auto = document.getElementById('auto-input').value.trim();
+  const token = getToken();
+
+  const btn = document.getElementById('btn-enviar');
+  btn.textContent = 'Enviando...';
+  btn.disabled = true;
+
+  try {
+    // Usar Edge Function — la validación ocurre en el servidor
+    const res = await fetch('https://nkjradximipkrzscgvhv.supabase.co/functions/v1/guardar-resena', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        token,
+        calificacion,
+        comentario:        comentario || null,
+        auto_comprado:     auto || null,
+        recomienda,
+        anonima,
+        nombre_cliente:    (() => {
+          if(anonima) return null;
+          const raw = document.getElementById('inp-nombre')?.value.trim() || '';
+          if(!raw) return null;
+          const p = raw.split(' ').filter(Boolean);
+          return p.length >= 2 ? p[0] + ' ' + p[1][0] + '.' : p[0];
+        })(),
+        device_fingerprint: getDeviceFingerprint(),
+      })
+    });
+
+    const result = await res.json();
+
+    if(!res.ok || result.error){
+      btn.textContent = '⭐ Enviar reseña';
+      btn.disabled = false;
+      // Mostrar error específico al usuario
+      document.getElementById('main').innerHTML = `
+        <div class="error-state fade-up">
+          <div class="error-icon">⚠️</div>
+          <div class="error-title">No se pudo enviar</div>
+          <div class="error-sub">${result.error || 'Intenta de nuevo más tarde.'}</div>
+        </div>`;
+      return;
+    }
+
+    // Éxito
+    const perfilUrl = vendedor.perfil_slug ? 'https://cierralo.mx/' + vendedor.perfil_slug : null;
+    document.getElementById('main').innerHTML = `
+      <div class="success-state fade-up">
+        <div class="success-icon">🎉</div>
+        <div class="success-title">¡Gracias por tu reseña!</div>
+        <div class="success-sub">
+          Tu opinión ya está visible en el perfil de <strong>${vendedor.nombre}</strong>.<br>
+          Ayudas a otros compradores a elegir vendedores de confianza.
+        </div>
+        ${perfilUrl ? `<a href="${perfilUrl}" class="success-profile-btn">Ver perfil de ${vendedor.nombre} →</a>` : ''}
+      </div>`;
+
+  } catch(e) {
+    btn.textContent = '⭐ Enviar reseña';
+    btn.disabled = false;
+    alert('Error de conexión. Verifica tu internet e intenta de nuevo.');
+  }
+}
+
+init();
+</script>
+</body>
+</html>

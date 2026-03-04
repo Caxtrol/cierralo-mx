@@ -1,0 +1,737 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<link rel="manifest" href="/manifest.json">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#FF6B35">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#09090F">
+<title>Ciérralo.mx — Tu asistente de ventas</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.1.6/purify.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<link rel="stylesheet" href="css/app.css">
+
+</head>
+<body>
+
+<div id="splash">
+  <div class="splash-logo">Ciérralo<span>.mx</span></div>
+  <div class="splash-tagline">Tu asistente de ventas siempre en tu bolsillo</div>
+  <div class="splash-loader"><div class="splash-loader-bar"></div></div>
+</div>
+
+<!-- LOGIN -->
+<div class="page" id="page-login">
+  <div class="login-logo">Ciérralo<span>.mx</span></div>
+  <div class="login-tagline">Tu asistente de ventas siempre en tu bolsillo</div>
+
+  <!-- PASO 1: ¿Tienes cuenta o es primera vez? -->
+  <div class="login-card login-step active" id="login-step-inicio">
+    <div class="login-title">Bienvenido 👋</div>
+    <div class="login-sub">¿Qué quieres hacer?</div>
+    <div style="display:flex;flex-direction:column;gap:10px;margin-top:8px;">
+      <button class="btn btn-p" onclick="irALogin()">Tengo cuenta — Entrar →</button>
+      <button class="btn btn-s" onclick="irARegistro()">Es mi primera vez — Registrarme</button>
+    </div>
+  </div>
+
+  <!-- PASO 2A: Login — número + PIN -->
+  <div class="login-card login-step" id="login-step-tel">
+    <div class="login-title">Entrar 🔐</div>
+    <div class="login-sub">Ingresa tu número y tu PIN de 4 dígitos.</div>
+    <div class="field-group">
+      <div class="field-label">Número de WhatsApp</div>
+      <input class="field-input" type="tel" id="login-tel" placeholder="81 2345 6789" autocomplete="tel" maxlength="15" oninput="this.value=this.value.replace(/[^0-9 ]/g,'')">
+    </div>
+    <div class="field-label" style="margin-bottom:8px;">Tu PIN</div>
+    <div class="pin-row" style="margin-top:0;margin-bottom:20px;">
+      <input class="pin-digit" id="pin-1" type="tel" inputmode="numeric" pattern="[0-9]*" maxlength="1" autocomplete="off" autocorrect="off" oninput="pinInput(this,1)" onkeydown="pinKeydown(event,1)">
+      <input class="pin-digit" id="pin-2" type="tel" inputmode="numeric" pattern="[0-9]*" maxlength="1" autocomplete="off" autocorrect="off" oninput="pinInput(this,2)" onkeydown="pinKeydown(event,2)">
+      <input class="pin-digit" id="pin-3" type="tel" inputmode="numeric" pattern="[0-9]*" maxlength="1" autocomplete="off" autocorrect="off" oninput="pinInput(this,3)" onkeydown="pinKeydown(event,3)">
+      <input class="pin-digit" id="pin-4" type="tel" inputmode="numeric" pattern="[0-9]*" maxlength="1" autocomplete="off" autocorrect="off" oninput="pinInput(this,4)" onkeydown="pinKeydown(event,4)">
+    </div>
+    <button class="btn btn-p" id="login-pin-btn" onclick="confirmarPin()">Entrar a Ciérralo →</button>
+    <div class="login-back" onclick="mostrarLoginStep('login-step-inicio')">← Regresar</div>
+    <div class="recovery-link" onclick="mostrarRecuperacion()">¿Olvidaste tu PIN?</div>
+  </div>
+
+  <!-- RECUPERACIÓN DE PIN — Paso R1: número -->
+  <div class="login-card login-step" id="login-step-recovery-tel">
+    <div class="login-title">Recuperar PIN 🔓</div>
+    <div class="login-sub">Ingresa el número de WhatsApp con el que te registraste.</div>
+    <div class="field-group">
+      <div class="field-label">Número de WhatsApp</div>
+      <input class="field-input" type="tel" id="recovery-tel" placeholder="81 2345 6789" autocomplete="tel" maxlength="15" oninput="this.value=this.value.replace(/[^0-9 ]/g,'')">
+    </div>
+    <button class="btn btn-p" id="recovery-tel-btn" onclick="verificarTelRecuperacion()">Continuar →</button>
+    <div class="login-back" onclick="mostrarLoginStep('login-step-tel')">← Regresar al login</div>
+  </div>
+
+  <!-- RECUPERACIÓN DE PIN — Paso R2: nuevo PIN -->
+  <div class="login-card login-step" id="login-step-recovery-pin">
+    <div class="login-title">Nuevo PIN 🔑</div>
+    <div class="login-sub">Elige un PIN de 4 dígitos que puedas recordar fácil.</div>
+    <div class="field-label" style="margin-bottom:8px;">Nuevo PIN</div>
+    <div class="pin-row" style="margin-top:0;margin-bottom:16px;">
+      <input class="pin-digit" id="rpin-1" type="number" maxlength="1" min="0" max="9" oninput="pinRecInput(this,1)" onkeydown="pinRecKeydown(event,1)">
+      <input class="pin-digit" id="rpin-2" type="number" maxlength="1" min="0" max="9" oninput="pinRecInput(this,2)" onkeydown="pinRecKeydown(event,2)">
+      <input class="pin-digit" id="rpin-3" type="number" maxlength="1" min="0" max="9" oninput="pinRecInput(this,3)" onkeydown="pinRecKeydown(event,3)">
+      <input class="pin-digit" id="rpin-4" type="number" maxlength="1" min="0" max="9" oninput="pinRecInput(this,4)" onkeydown="pinRecKeydown(event,4)">
+    </div>
+    <div class="field-label" style="margin-bottom:8px;">Confirmar PIN</div>
+    <div class="pin-row" style="margin-top:0;margin-bottom:20px;">
+      <input class="pin-digit" id="rpin-c1" type="number" maxlength="1" min="0" max="9" oninput="pinRecConfInput(this,1)" onkeydown="pinRecConfKeydown(event,1)">
+      <input class="pin-digit" id="rpin-c2" type="number" maxlength="1" min="0" max="9" oninput="pinRecConfInput(this,2)" onkeydown="pinRecConfKeydown(event,2)">
+      <input class="pin-digit" id="rpin-c3" type="number" maxlength="1" min="0" max="9" oninput="pinRecConfInput(this,3)" onkeydown="pinRecConfKeydown(event,3)">
+      <input class="pin-digit" id="rpin-c4" type="number" maxlength="1" min="0" max="9" oninput="pinRecConfInput(this,4)" onkeydown="pinRecConfKeydown(event,4)">
+    </div>
+    <button class="btn btn-p" id="recovery-pin-btn" onclick="cambiarPin()">Guardar nuevo PIN →</button>
+    <div class="login-back" onclick="mostrarLoginStep('login-step-recovery-tel')">← Regresar</div>
+  </div>
+
+  <!-- PASO 2B: Registro — número + PIN nuevo -->
+  <div class="login-card login-step" id="login-step-pin-nuevo">
+    <div class="login-title">Crear cuenta 🔑</div>
+    <div class="login-sub">Ingresa tu número y elige un PIN de 4 dígitos que recuerdes fácil.</div>
+    <div class="field-group">
+      <div class="field-label">Número de WhatsApp</div>
+      <input class="field-input" type="tel" id="login-tel-nuevo" placeholder="81 2345 6789" autocomplete="tel" maxlength="15" oninput="this.value=this.value.replace(/[^0-9 ]/g,'')">
+    </div>
+    <div class="field-label" style="margin-bottom:8px;">Elige tu PIN</div>
+    <div class="pin-row" style="margin-top:0;margin-bottom:20px;">
+      <input class="pin-digit" id="pin-n1" type="number" maxlength="1" min="0" max="9" oninput="pinNuevoInput(this,1)" onkeydown="pinNuevoKeydown(event,1)">
+      <input class="pin-digit" id="pin-n2" type="number" maxlength="1" min="0" max="9" oninput="pinNuevoInput(this,2)" onkeydown="pinNuevoKeydown(event,2)">
+      <input class="pin-digit" id="pin-n3" type="number" maxlength="1" min="0" max="9" oninput="pinNuevoInput(this,3)" onkeydown="pinNuevoKeydown(event,3)">
+      <input class="pin-digit" id="pin-n4" type="number" maxlength="1" min="0" max="9" oninput="pinNuevoInput(this,4)" onkeydown="pinNuevoKeydown(event,4)">
+    </div>
+    <button class="btn btn-p" id="login-nuevo-btn" onclick="registrarConPin()">Crear cuenta →</button>
+    <div class="login-back" onclick="mostrarLoginStep('login-step-inicio')">← Regresar</div>
+    <div class="login-note">Este PIN es solo para esta app. Guárdalo en un lugar seguro.</div>
+  </div>
+
+</div>
+
+<!-- ONBOARDING -->
+<div class="page" id="page-onboarding">
+  <div id="ob-step1">
+    <div class="ob-header">
+      <div class="ob-step">Paso 1 de 3</div>
+      <div class="ob-title">¿Cómo te llamas y dónde trabajas?</div>
+      <div class="ob-sub">Esto personaliza tu experiencia en la app.</div>
+    </div>
+    <div class="ob-progress"><div class="ob-dot done"></div><div class="ob-dot"></div><div class="ob-dot"></div></div>
+    <div class="ob-body">
+      <div class="field-group" style="margin-bottom:14px;">
+        <div class="field-label">Tu nombre</div>
+        <input class="ob-input" type="text" id="ob-nombre" placeholder="Ej. Carlos Martínez" autocomplete="name">
+      </div>
+      <div class="field-group">
+        <div class="field-label">Nombre de tu agencia</div>
+        <input class="ob-input" type="text" id="ob-agencia" placeholder="Ej. Toyota Monterrey Norte">
+      </div>
+    </div>
+    <div class="ob-footer"><button class="btn btn-p" onclick="obNext1()">Siguiente →</button></div>
+  </div>
+  <div id="ob-step2" style="display:none;">
+    <div class="ob-header">
+      <div class="ob-step">Paso 2 de 3</div>
+      <div class="ob-title">¿Cuántos autos quieres vender este mes?</div>
+      <div class="ob-sub">La app ajusta sus alertas a tu meta.</div>
+    </div>
+    <div class="ob-progress"><div class="ob-dot done"></div><div class="ob-dot done"></div><div class="ob-dot"></div></div>
+    <div class="ob-body">
+      <div class="ob-options" id="ob-meta-opts">
+        <div class="ob-opt" onclick="selectMeta(this,5)"><div class="ob-opt-icon">🎯</div><div><div class="ob-opt-title">1 – 5 unidades</div><div class="ob-opt-sub">Estoy empezando o en agencia pequeña</div></div></div>
+        <div class="ob-opt" onclick="selectMeta(this,10)"><div class="ob-opt-icon">🚀</div><div><div class="ob-opt-title">6 – 10 unidades</div><div class="ob-opt-sub">Meta promedio de vendedor activo</div></div></div>
+        <div class="ob-opt" onclick="selectMeta(this,15)"><div class="ob-opt-icon">⭐</div><div><div class="ob-opt-title">11 – 15 unidades</div><div class="ob-opt-sub">Vendedor top de mi agencia</div></div></div>
+        <div class="ob-opt" onclick="selectMeta(this,20)"><div class="ob-opt-icon">🏆</div><div><div class="ob-opt-title">16+ unidades</div><div class="ob-opt-sub">Soy de los mejores de la región</div></div></div>
+      </div>
+    </div>
+    <div class="ob-footer"><button class="btn btn-p" id="ob-btn2" onclick="obNext2()" style="background:var(--s3);color:var(--text3);">Siguiente →</button></div>
+  </div>
+  <div id="ob-step3" style="display:none;">
+    <div class="ob-header">
+      <div class="ob-step">Paso 3 de 3</div>
+      <div class="ob-title">¿Cuál es tu mayor reto hoy?</div>
+      <div class="ob-sub">La IA prioriza lo que más te cuesta.</div>
+    </div>
+    <div class="ob-progress"><div class="ob-dot done"></div><div class="ob-dot done"></div><div class="ob-dot done"></div></div>
+    <div class="ob-body">
+      <div class="ob-options">
+        <div class="ob-opt" onclick="selectProblema(this,'seguimiento')"><div class="ob-opt-icon">📵</div><div><div class="ob-opt-title">No me responden</div><div class="ob-opt-sub">Los prospectos se enfrían y pierdo el hilo</div></div></div>
+        <div class="ob-opt" onclick="selectProblema(this,'mensajes')"><div class="ob-opt-icon">💬</div><div><div class="ob-opt-title">No sé qué escribirles</div><div class="ob-opt-sub">Me trabo al momento de mandar mensajes</div></div></div>
+        <div class="ob-opt" onclick="selectProblema(this,'organizacion')"><div class="ob-opt-icon">🗂️</div><div><div class="ob-opt-title">Tengo prospectos desorganizados</div><div class="ob-opt-sub">Pierdo prospectos porque no los registro bien</div></div></div>
+        <div class="ob-opt" onclick="selectProblema(this,'cierre')"><div class="ob-opt-icon">🎯</div><div><div class="ob-opt-title">Me cuesta cerrar</div><div class="ob-opt-sub">El cliente llega a cotización pero no firma</div></div></div>
+      </div>
+    </div>
+    <div class="ob-footer"><button class="btn btn-p" id="ob-btn3" onclick="obFinish()" style="background:var(--s3);color:var(--text3);">¡Empezar a vender! 🚀</button></div>
+  </div>
+</div>
+
+<!-- APP -->
+<div class="page" id="page-app">
+  <header class="topbar">
+    <div class="topbar-logo">Ciérralo<span>.mx</span></div>
+    <div class="topbar-right">
+      <div class="topbar-badge">BETA</div>
+      <div class="topbar-avatar" id="app-avatar" onclick="goTo('perfil')">?</div>
+    </div>
+  </header>
+  <main id="main">
+
+    <!-- DASHBOARD -->
+    <div class="screen active" id="scr-dashboard">
+      <div class="dash-greeting">
+        <div class="dash-time" id="greeting-time">Cargando...</div>
+        <div class="dash-name" id="dash-nombre">Cargando...</div>
+        <div class="dash-sub" id="dash-sub">Revisando tu información...</div>
+      </div>
+      <div class="meta-card">
+        <div class="meta-row">
+          <div><div class="meta-label">Meta del mes</div><div class="meta-sub" id="dash-mes">—</div></div>
+          <div style="text-align:right;"><div class="meta-val" id="dash-progreso">0 / <span id="dash-meta">10</span></div><div class="meta-sub">unidades vendidas</div></div>
+        </div>
+        <div class="progress-bar"><div class="progress-fill" id="dash-progress-fill" style="width:0%"></div></div>
+        <div style="font-size:10px;color:var(--text3);margin-top:6px;text-align:right;" id="dash-pct">0% completado</div>
+      </div>
+      <div class="stats-grid">
+        <div class="stat-card" onclick="goTo('prospectos')"><div class="stat-val" style="color:var(--orange);" id="stat-prospectos">0</div><div class="stat-lbl">Activos</div></div>
+        <div class="stat-card" onclick="goTo('prospectos')"><div class="stat-val" style="color:var(--yellow);" id="stat-calientes">0</div><div class="stat-lbl">Calientes</div></div>
+        <div class="stat-card"><div class="stat-val" style="color:var(--green);" id="stat-ganados">0</div><div class="stat-lbl">Vendidos</div></div>
+      </div>
+      <!-- WEEKLY WRAPPED BANNER -->
+      <div id="wrapped-banner" style="display:none;margin:0 16px 12px;"></div>
+
+      <div style="padding:0 16px 8px;">
+        <div class="rwb mb8">
+          <div class="t1 sy" style="font-size:16px;">Alertas de hoy</div>
+          <div class="badge bo" id="dash-alertas-cnt" style="display:none;">0</div>
+        </div>
+        <div id="dash-alertas-list"></div>
+      </div>
+    </div>
+
+    <!-- PROSPECTOS -->
+    <div class="screen" id="scr-prospectos">
+      <div class="sec-header"><div class="sec-chip">📋 Pipeline</div><div class="sec-title">Prospectos</div><div id="scr-prospectos-sub" class="sec-sub">Cargando...</div></div>
+      <div class="kanban-scroll" id="kanban-board">
+        <div class="kanban-col">
+          <div class="kanban-col-header"><div class="kanban-col-name">Nuevo</div><div class="kanban-count" id="cnt-nuevo" style="background:var(--s3);color:var(--text3);">0</div></div>
+          <div id="cards-nuevo"></div>
+        </div>
+        <div class="kanban-col">
+          <div class="kanban-col-header"><div class="kanban-col-name">Contactado</div><div class="kanban-count" id="cnt-contactado" style="background:var(--blueBg);color:var(--blue);">0</div></div>
+          <div id="cards-contactado"></div>
+        </div>
+        <div class="kanban-col">
+          <div class="kanban-col-header"><div class="kanban-col-name">Cotización</div><div class="kanban-count" id="cnt-cotizacion" style="background:var(--orangeBg);color:var(--orange);">0</div></div>
+          <div id="cards-cotizacion"></div>
+        </div>
+        <div class="kanban-col">
+          <div class="kanban-col-header"><div class="kanban-col-name">Prueba 🚗</div><div class="kanban-count" id="cnt-prueba" style="background:#A855F714;color:#A855F7;">0</div></div>
+          <div id="cards-prueba"></div>
+        </div>
+        <div class="kanban-col">
+          <div class="kanban-col-header"><div class="kanban-col-name">Trámite</div><div class="kanban-count" id="cnt-tramite" style="background:var(--yellowBg);color:var(--yellow);">0</div></div>
+          <div id="cards-tramite"></div>
+        </div>
+        <div class="kanban-col">
+          <div class="kanban-col-header"><div class="kanban-col-name">Ganado 🎉</div><div class="kanban-count" id="cnt-ganado" style="background:var(--greenBg);color:var(--green);">0</div></div>
+          <div id="cards-ganado"></div>
+        </div>
+        <div class="kanban-col">
+          <div class="kanban-col-header"><div class="kanban-col-name">Perdido</div><div class="kanban-count" id="cnt-perdido" style="background:var(--redBg);color:var(--red);">0</div></div>
+          <div id="cards-perdido"></div>
+        </div>
+      </div>
+      <div class="add-btn" onclick="abrirModalProspecto()"><span>+</span><span>Nuevo prospecto</span></div>
+    </div>
+
+    <!-- MENSAJES -->
+    <div class="screen" id="scr-mensajes">
+      <div class="sec-header">
+        <div class="sec-chip">💬 IA</div>
+        <div class="sec-title">Mensajes</div>
+        <div class="sec-sub" id="msg-screen-sub">Selecciona un prospecto para generar su mensaje</div>
+      </div>
+
+      <!-- SELECTOR DE PROSPECTO -->
+      <div id="msg-prospecto-selector" style="padding:0 16px 12px;">
+        <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;">¿Para quién es el mensaje?</div>
+        <div id="msg-prospecto-lista"></div>
+        <div style="margin-top:8px;padding:10px 12px;background:var(--s2);border:1px dashed var(--border2);border-radius:var(--rs);font-size:12px;color:var(--text3);text-align:center;cursor:pointer;" onclick="abrirModalProspecto()">
+          + Registrar nuevo prospecto primero
+        </div>
+      </div>
+
+      <!-- PROSPECTO SELECCIONADO + SITUACIONES -->
+      <div id="msg-prospecto-activo" style="display:none;">
+        <div id="msg-prospecto-header" style="margin:0 16px 12px;padding:12px 14px;border-radius:var(--rs);display:flex;align-items:center;gap:10px;border:2px solid #FF6B3540;background:var(--orangeBg);"></div>
+        <div style="padding:0 16px 8px;font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;">Elige la situación</div>
+        <div id="msg-situaciones-lista"></div>
+      </div>
+
+      <!-- MENSAJE GENERADO -->
+      <div id="msg-preview" style="display:none;" class="msg-preview">
+        <div class="rwb mb8">
+          <div class="rw g8">
+            <span style="font-size:18px;">✨</span>
+            <div style="font-family:'Syne',sans-serif;font-size:13px;font-weight:700;color:var(--green);">Mensaje para <span id="msg-para-nombre"></span></div>
+          </div>
+          <div class="ai-badge">🤖 Groq · Llama 3.1</div>
+        </div>
+        <div class="msg-bubble" id="msg-content"></div>
+        <div class="msg-actions" id="msg-actions-btns">
+          <button class="msg-btn msg-btn-copy" id="btn-copiar-msg" onclick="copiarMsgContextual()">📋 Copiar y registrar envío</button>
+          <button class="msg-btn msg-btn-regen" onclick="regenerarMensaje()">🔄 Otra versión</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- INVENTARIO -->
+    <div class="screen" id="scr-inventario">
+      <div class="sec-header"><div class="sec-chip">🚗 Stock</div><div class="sec-title">Inventario</div><div class="sec-sub" id="inv-sub">El auto correcto para cada cliente</div></div>
+      <div class="inv-header-card">
+        <div class="inv-add-row">
+          <div class="inv-btn inv-btn-p" onclick="abrirModalAuto()"><div class="inv-btn-icon">➕</div><div>Agregar auto</div></div>
+          <div class="inv-btn inv-btn-s" onclick="showToast('OCR de sticker — próximamente')"><div class="inv-btn-icon">📷</div><div>Escanear</div></div>
+          <div class="inv-btn inv-btn-s" onclick="abrirImportExcel()"><div class="inv-btn-icon">📁</div><div>Excel</div></div>
+        </div>
+        <div class="inv-stats">
+          <div class="inv-stat"><div class="inv-stat-val" style="color:var(--green);" id="inv-disponibles">0</div><div class="inv-stat-lbl">Disponibles</div></div>
+          <div class="inv-stat"><div class="inv-stat-val" style="color:var(--yellow);" id="inv-apartados">0</div><div class="inv-stat-lbl">Apartados</div></div>
+          <div class="inv-stat"><div class="inv-stat-val" style="color:var(--orange);" id="inv-riesgo">0</div><div class="inv-stat-lbl">+21 días</div></div>
+        </div>
+      </div>
+      <div id="lista-autos">
+        <div style="padding:0 16px;"><div style="background:var(--s1);border:1px solid var(--border);border-radius:var(--r);padding:24px;text-align:center;"><div style="font-size:40px;margin-bottom:10px;">🚗</div><div style="font-family:'Syne',sans-serif;font-size:16px;font-weight:700;margin-bottom:6px;">Sin autos aún</div><div style="font-size:13px;color:var(--text2);line-height:1.5;">Toca "Agregar auto" para registrar tu primer unidad.</div></div></div>
+      </div>
+    </div>
+
+    <!-- PERFIL -->
+    <div class="screen" id="scr-perfil">
+      <div class="profile-hero">
+        <div class="profile-av" id="perfil-av">?</div>
+        <div class="profile-name" id="perfil-nombre">Cargando...</div>
+        <div class="profile-agency" id="perfil-agencia">—</div>
+        <div class="plan-badge">🌱 Beta gratuita</div>
+      </div>
+      <!-- CARD MI PLAN — visible al entrar a Perfil -->
+      <div class="profile-section" style="padding:12px 16px 4px;">
+        <div id="plan-actual-card" style="background:linear-gradient(135deg,#FF6B3510,var(--s1));
+          border:1px solid #FF6B3535;border-radius:14px;padding:14px 16px;cursor:pointer;"
+          onclick="mostrarPantallaPlanesUpgrade('ver_planes')">
+          <div style="display:flex;align-items:center;justify-content:space-between;">
+            <div style="flex:1;">
+              <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;
+                letter-spacing:.5px;margin-bottom:4px;">MI PLAN</div>
+              <div id="plan-nombre-badge" style="font-family:Syne,sans-serif;font-size:16px;
+                font-weight:800;color:var(--orange);">Gratis</div>
+              <div id="plan-desc-badge" style="font-size:11px;color:var(--text2);margin-top:2px;">
+                Toca para ver planes Pro y Elite
+              </div>
+            </div>
+            <div style="text-align:right;flex-shrink:0;">
+              <div style="font-size:11px;color:var(--orange);font-weight:700;">⚡ Upgrade</div>
+              <div style="font-size:18px;margin-top:2px;color:var(--orange);">&#8594;</div>
+            </div>
+          </div>
+          <div id="plan-prospectos-barra" style="margin-top:10px;"></div>
+        </div>
+      </div>
+
+      <!-- NOTIFICACIONES PUSH -->
+      <div class="profile-section" style="padding:0;">
+        <div id="push-notif-section"></div>
+      </div>
+      <!-- SECCIÓN IA — se rellena con JS -->
+      <div class="profile-section" id="perfil-api-section" style="min-height:60px;">
+        <div style="text-align:center;padding:20px;color:var(--text3);font-size:12px;">Cargando configuración...</div>
+      </div>
+      <!-- SEMÁFORO REPUTACIÓN WHATSAPP -->
+      <div class="profile-section" id="semaforo-wa-section">
+        <div class="profile-section-title">Reputación WhatsApp</div>
+        <div id="semaforo-wa-card" style="padding:4px 0;">
+          <div style="text-align:center;color:var(--text3);font-size:12px;">Cargando...</div>
+        </div>
+      </div>
+
+      <!-- PERFIL PÚBLICO -->
+      <div class="profile-section">
+        <div class="profile-section-title">Mi perfil público</div>
+        <div id="perfil-publico-card" style="padding:4px 0;">
+          <div style="text-align:center;color:var(--text3);font-size:12px;">Cargando...</div>
+        </div>
+      </div>
+
+      <div class="profile-section">
+        <div class="profile-section-title">Mi cuenta</div>
+        <div class="profile-item" onclick="showToast('Editar perfil — próximamente')">
+          <div class="profile-item-icon">👤</div>
+          <div style="flex:1;"><div class="profile-item-name">Mi perfil</div><div class="profile-item-val" id="perfil-email-item">—</div></div>
+          <div style="color:var(--text4);">›</div>
+        </div>
+        <div class="profile-item" onclick="showToast('Cambiar meta — próximamente')">
+          <div class="profile-item-icon">🎯</div>
+          <div style="flex:1;"><div class="profile-item-name">Meta mensual</div><div class="profile-item-val" id="perfil-meta-item">— unidades</div></div>
+          <div style="color:var(--text4);">›</div>
+        </div>
+        <div class="profile-item" onclick="showToast('Notificaciones push — Sesión 4')">
+          <div class="profile-item-icon">🔔</div>
+          <div style="flex:1;"><div class="profile-item-name">Notificaciones</div><div class="profile-item-val">Alertas automáticas · Sesión 4</div></div>
+          <div style="color:var(--text4);">›</div>
+        </div>
+      </div>
+      <div style="padding:0 16px 16px;">
+        <button class="btn" style="background:var(--redBg);color:var(--red);border:1px solid #EF444430;" onclick="signOut()">Cerrar sesión</button>
+      </div>
+    </div>
+
+  </main>
+  <nav class="nav">
+    <div class="nb active" onclick="goTo('dashboard',this)"><div class="ni">🏠</div><div class="nl">Inicio</div><div class="n-dot show"></div></div>
+    <div class="nb" onclick="goTo('prospectos',this)"><div class="ni">👥</div><div class="nl">Pipeline</div></div>
+    <div class="nb" onclick="goTo('mensajes',this)"><div class="ni">💬</div><div class="nl">Mensajes</div></div>
+    <div class="nb" onclick="goTo('inventario',this)"><div class="ni">🚗</div><div class="nl">Stock</div></div>
+    <div class="nb" onclick="goTo('perfil',this)"><div class="ni">👤</div><div class="nl">Perfil</div></div>
+  </nav>
+</div>
+
+<div id="toast"></div>
+
+<!-- MODAL: CONFIRMACIÓN 1 TOQUE -->
+<div class="confirm-overlay" class="modal-overlay" id="modal-wrapped" onclick="cerrarModalSiFondo(event,'modal-wrapped')">
+  <div class="modal" style="background:linear-gradient(180deg,#1A1A2E 0%,var(--s1) 100%);">
+    <div class="modal-handle"></div>
+    <div id="wrapped-modal-content"><!-- filled by JS --></div>
+  </div>
+</div>
+
+<!-- MODAL PERFIL PÚBLICO -->
+<div class="modal-overlay" id="modal-perfil-publico" onclick="cerrarModalSiFondo(event,'modal-perfil-publico')">
+  <div class="modal" style="max-height:90vh;">
+    <div class="modal-handle"></div>
+    <div style="padding:0 20px 24px;">
+      <div style="font-family:'Syne',sans-serif;font-weight:800;font-size:20px;color:var(--text);margin-bottom:4px;">👤 Tu perfil público</div>
+      <div style="font-size:12px;color:var(--text2);margin-bottom:16px;">Lo que verán tus clientes en cierralo.mx/tu-nombre</div>
+
+      <div class="form-group">
+        <label class="form-label">Bio corta</label>
+        <textarea class="form-input" id="pp-bio" rows="2" maxlength="160" placeholder="Ej. 10 años vendiendo Hyundai en Monterrey. Especialista en financiamiento."></textarea>
+        <div style="font-size:10px;color:var(--text3);margin-top:3px;text-align:right;" id="pp-bio-count">0/160</div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Años de experiencia</label>
+          <input class="form-input" type="number" id="pp-experiencia" min="0" max="50" placeholder="5">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Especialidad</label>
+          <select class="form-select form-input" id="pp-especialidad">
+            <option value="">Selecciona</option>
+            <option value="SUVs y Crossovers">SUVs y Crossovers</option>
+            <option value="Sedanes">Sedanes</option>
+            <option value="Pickups">Pickups</option>
+            <option value="Autos de lujo">Autos de lujo</option>
+            <option value="Autos eléctricos">Autos eléctricos</option>
+            <option value="Financiamiento">Financiamiento</option>
+            <option value="Flotillas">Flotillas</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Marcas con experiencia</label>
+        <input class="form-input" type="text" id="pp-marcas" placeholder="Ej. Toyota, Hyundai, Kia">
+      </div>
+
+      <div style="background:var(--s2);border-radius:10px;padding:12px;margin-bottom:14px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+          <div style="font-size:12px;font-weight:700;color:var(--text);">Activar perfil público</div>
+          <div id="pp-toggle" onclick="togglePerfilPublico()" style="width:44px;height:24px;border-radius:12px;background:var(--s3);cursor:pointer;position:relative;transition:background .2s;">
+            <div id="pp-toggle-dot" style="width:20px;height:20px;border-radius:50%;background:white;position:absolute;top:2px;left:2px;transition:left .2s;"></div>
+          </div>
+        </div>
+        <div style="font-size:11px;color:var(--text3);">Cuando está activo, los clientes pueden buscarte en cierralo.mx y ver tus reseñas.</div>
+      </div>
+
+      <div style="display:flex;gap:8px;">
+        <button onclick="cerrarModal('modal-perfil-publico')" style="flex:1;background:var(--s2);color:var(--text2);border:1px solid var(--border);border-radius:10px;padding:12px;font-family:'Syne',sans-serif;font-weight:700;font-size:12px;cursor:pointer;">Cancelar</button>
+        <button onclick="guardarPerfilPublico()" style="flex:2;background:var(--orange);color:white;border:none;border-radius:10px;padding:12px;font-family:'Syne',sans-serif;font-weight:700;font-size:12px;cursor:pointer;" id="btn-guardar-perfil-pub">Guardar perfil →</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL IMPORTAR EXCEL (PROSPECTOS) -->
+<div class="modal-overlay" id="modal-excel" onclick="cerrarModalSiFondo(event,'modal-excel')">
+  <div class="modal" style="max-height:85vh;">
+    <div class="modal-handle"></div>
+    <div style="padding:0 20px 24px;">
+      <div style="font-family:'Syne',sans-serif;font-weight:800;font-size:20px;color:var(--text);margin-bottom:4px;">⛏️ Minería de Oro</div>
+      <div style="font-size:12px;color:var(--text2);margin-bottom:16px;">Encuentra clientes dormidos en tu lista — sin doble captura</div>
+
+      <!-- PASO 1: Upload -->
+      <div id="excel-paso1">
+        <div style="background:var(--s2);border:2px dashed var(--border2);border-radius:12px;padding:24px;text-align:center;margin-bottom:12px;cursor:pointer;" onclick="document.getElementById('excel-file-input').click()">
+          <div style="font-size:36px;margin-bottom:8px;">📊</div>
+          <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:4px;">Sube tu lista de Excel o CSV</div>
+          <div style="font-size:11px;color:var(--text3);">Columnas mínimas: Nombre, Teléfono</div>
+          <div style="font-size:10px;color:var(--text4);margin-top:6px;">También acepta: correo, auto interés, notas</div>
+        </div>
+        <input type="file" id="excel-file-input" accept=".xlsx,.xls,.csv" style="display:none;" onchange="procesarArchivoExcel(this)">
+        <div style="font-size:10px;color:var(--text3);text-align:center;font-style:italic;">Tu archivo no sale de tu teléfono — se procesa localmente</div>
+      </div>
+
+      <!-- PASO 2: Preview -->
+      <div id="excel-paso2" style="display:none;">
+        <div id="excel-preview-content"></div>
+      </div>
+
+      <!-- PASO 3: Resultado -->
+      <div id="excel-paso3" style="display:none;">
+        <div id="excel-resultado-content"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL CONFIRMACIÓN -->
+<div class="confirm-overlay" id="modal-confirmacion">
+  <div class="confirm-box">
+    <div class="confirm-handle"></div>
+    <div class="confirm-prospect">
+      <div id="conf-avatar" style="width:42px;height:42px;border-radius:50%;background:var(--orangeBg);color:var(--orange);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:14px;flex-shrink:0;"></div>
+      <div>
+        <div style="font-size:12px;color:var(--text3);">Mensaje enviado hace 2h a</div>
+        <div id="conf-nombre" style="font-size:15px;font-weight:700;color:var(--text);"></div>
+      </div>
+    </div>
+    <div class="confirm-q">¿Cómo quedó la conversación?</div>
+    <div class="confirm-opts">
+      <div class="copt copt-pos" onclick="registrarRespuesta('positivo')">✅ Respondió positivo — vamos avanzando</div>
+      <div class="copt copt-no" onclick="registrarRespuesta('sin_respuesta')">📵 No contestó — seguimiento pendiente</div>
+      <div class="copt copt-win" onclick="registrarRespuesta('cerrado')">🎉 ¡Cerré la venta! — registrar cierre</div>
+      <div class="copt copt-lost" onclick="registrarRespuesta('perdido')">❌ Se fue con otro — marcar como perdido</div>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: NUEVO PROSPECTO -->
+<div class="modal-overlay" id="modal-prospecto" onclick="cerrarModalSiFondo(event,'modal-prospecto')">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title">Nuevo prospecto</div>
+    <div class="modal-sub">Registra los datos básicos — puedes completar después.</div>
+    <div id="dedup-warning" style="display:none;" class="dedup-card">
+      <div class="dedup-title">⚠️ Posible duplicado detectado</div>
+      <div class="dedup-compare" id="dedup-compare"></div>
+      <div style="font-size:11px;color:var(--blue);text-align:center;margin-bottom:8px;" id="dedup-reason"></div>
+      <div style="display:flex;gap:8px;">
+        <div onclick="confirmarDuplicado()" style="flex:1;padding:9px;background:var(--blue);color:white;border-radius:var(--rxs);font-size:11px;font-weight:700;text-align:center;cursor:pointer;">Es la misma persona</div>
+        <div onclick="ignorarDuplicado()" style="flex:1;padding:9px;background:var(--s3);color:var(--text2);border-radius:var(--rxs);font-size:11px;font-weight:700;text-align:center;cursor:pointer;">Son diferentes</div>
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Nombre completo *</label>
+      <input class="form-input" type="text" id="p-nombre" placeholder="Ej. Miguel López" autocomplete="off">
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Teléfono</label>
+        <input class="form-input" type="tel" id="p-tel" placeholder="81 1234 5678" oninput="checkDuplicado()">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Fuente</label>
+        <select class="form-select form-input" id="p-fuente">
+          <option value="visita">Visita</option>
+          <option value="facebook">Facebook</option>
+          <option value="referido">Referido</option>
+          <option value="instagram">Instagram</option>
+          <option value="otro">Otro</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Auto de interés</label>
+      <input class="form-input" type="text" id="p-auto" placeholder="Ej. Tucson 2024 GLS">
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Presupuesto ($)</label>
+        <input class="form-input" type="number" id="p-presupuesto" placeholder="450000">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Etapa inicial</label>
+        <select class="form-select form-input" id="p-etapa">
+          <option value="nuevo">Nuevo</option>
+          <option value="contactado">Contactado</option>
+          <option value="cotizacion">Cotización</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Notas</label>
+      <input class="form-input" type="text" id="p-notas" placeholder="Algo importante a recordar...">
+    </div>
+    <div style="display:flex;gap:10px;margin-top:4px;">
+      <button class="btn btn-s" style="flex:1;" onclick="cerrarModal('modal-prospecto')">Cancelar</button>
+      <button class="btn btn-p" style="flex:2;" id="btn-guardar-prospecto" onclick="guardarProspecto()">Guardar prospecto →</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: DETALLE PROSPECTO -->
+<div class="modal-overlay" id="modal-detalle" onclick="cerrarModalSiFondo(event,'modal-detalle')">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;">
+      <div id="det-avatar" style="width:48px;height:48px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:16px;flex-shrink:0;"></div>
+      <div style="flex:1;">
+        <div id="det-nombre" style="font-family:'Syne',sans-serif;font-size:18px;font-weight:800;"></div>
+        <div id="det-sub" style="font-size:12px;color:var(--text2);margin-top:2px;"></div>
+      </div>
+      <div id="det-thermo" style="font-family:'Syne',sans-serif;font-size:22px;font-weight:800;"></div>
+    </div>
+    <div id="det-info" style="background:var(--s2);border-radius:var(--rs);padding:12px;margin-bottom:14px;"></div>
+    <!-- TABS -->
+    <div class="det-tabs">
+      <div class="det-tab active" id="tab-etapa" onclick="switchDetTab('etapa')">Etapa</div>
+      <div class="det-tab" id="tab-auto" onclick="switchDetTab('auto')">🚗 Auto</div>
+      <div class="det-tab" id="tab-editar" onclick="switchDetTab('editar')">✏️ Editar</div>
+    </div>
+
+    <!-- TAB: ETAPA -->
+    <div id="detpanel-etapa">
+      <div style="font-family:'Syne',sans-serif;font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">Mover a etapa</div>
+      <div class="etapa-grid" id="etapa-btns"></div>
+    </div>
+
+    <!-- TAB: AUTO DE INVENTARIO -->
+    <div id="detpanel-auto" style="display:none;">
+      <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;">Asignar auto del inventario</div>
+      <div id="det-autos-lista"></div>
+    </div>
+
+    <!-- TAB: EDITAR DATOS -->
+    <div id="detpanel-editar" style="display:none;">
+      <div class="form-group"><label class="form-label">Nombre completo</label><input class="form-input" id="edit-nombre" type="text" placeholder="Nombre del prospecto"></div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Teléfono</label><input class="form-input" id="edit-tel" type="tel" placeholder="10 dígitos"></div>
+        <div class="form-group"><label class="form-label">Presupuesto</label><input class="form-input" id="edit-presupuesto" type="number" placeholder="Ej. 350000"></div>
+      </div>
+      <div class="form-group"><label class="form-label">Auto de interés</label><input class="form-input" id="edit-auto" type="text" placeholder="Ej. Tucson 2024"></div>
+      <div class="form-group"><label class="form-label">Notas</label><textarea class="form-input" id="edit-notas" rows="2" placeholder="Observaciones importantes..."></textarea></div>
+      <button class="btn btn-p" style="margin-top:4px;" onclick="guardarEdicionProspecto()">💾 Guardar cambios</button>
+    </div>
+
+    <div style="display:flex;gap:8px;margin-top:14px;">
+      <button class="btn btn-p" style="flex:2;" onclick="abrirMensajeDesdeProspecto()">💬 Generar mensaje</button>
+      <button class="btn btn-s" style="flex:1;" onclick="cerrarModal('modal-detalle')">Cerrar</button>
+    </div>
+    <div style="margin-top:8px;">
+      <button class="btn" style="background:var(--yellowBg);color:var(--yellow);border:1px solid #F59E0B30;font-size:12px;" onclick="mostrarModalResena(prospectoActual)">⭐ Pedir reseña a este cliente</button>
+    </div>
+    <div style="margin-top:6px;">
+      <button class="btn" style="background:var(--redBg);color:var(--red);border:1px solid #EF444430;font-size:11px;" onclick="eliminarProspecto()">🗑️ Eliminar prospecto</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: NUEVO AUTO -->
+<div class="modal-overlay" id="modal-auto" onclick="cerrarModalSiFondo(event,'modal-auto')">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title">Agregar auto</div>
+    <div class="modal-sub">Registra una unidad de tu inventario.</div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Marca *</label>
+        <input class="form-input" type="text" id="a-marca" placeholder="Toyota">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Modelo *</label>
+        <input class="form-input" type="text" id="a-modelo" placeholder="Tucson">
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Año *</label>
+        <input class="form-input" type="number" id="a-anio" placeholder="2024">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Versión</label>
+        <input class="form-input" type="text" id="a-version" placeholder="GLS">
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Color</label>
+        <input class="form-input" type="text" id="a-color" placeholder="Blanco Perla">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Estado</label>
+        <select class="form-select form-input" id="a-estado">
+          <option value="disponible">Disponible</option>
+          <option value="apartado">Apartado</option>
+          <option value="vendido">Vendido</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Precio lista ($) *</label>
+        <input class="form-input" type="number" id="a-precio" placeholder="479900">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Mensualidad desde</label>
+        <input class="form-input" type="number" id="a-mensualidad" placeholder="4200">
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Equipamiento destacado</label>
+      <input class="form-input" type="text" id="a-equip" placeholder="Pantalla 10.25, Cámara 360, Android Auto">
+    </div>
+    <div style="display:flex;gap:10px;margin-top:4px;">
+      <button class="btn btn-s" style="flex:1;" onclick="cerrarModal('modal-auto')">Cancelar</button>
+      <button class="btn btn-p" style="flex:2;" id="btn-guardar-auto" onclick="guardarAuto()">Guardar auto →</button>
+    </div>
+  </div>
+</div>
+
+
+<!-- ═══ SCRIPTS — orden de carga importa ═══ -->
+<!-- CDN externos -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.1.6/purify.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
+<!-- Módulos de Ciérralo.mx -->
+<script src="js/config.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/crm.js"></script>
+<script src="js/dashboard.js"></script>
+<script src="js/mensajes.js"></script>
+<script src="js/tabs.js"></script>
+<script src="js/features.js"></script>
+
+<script>
+// ── Registrar Service Worker para notificaciones push ──
+if('serviceWorker' in navigator){
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js')
+      .then(reg => { window._swRegistration = reg; })
+      .catch(err => console.warn('SW no registrado:', err));
+  });
+}
+</script>
+</body>
+</html>
