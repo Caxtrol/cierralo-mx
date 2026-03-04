@@ -73,12 +73,9 @@ window.addEventListener('load', async () => {
         window._authToken    = session.access_token;
         window._refreshToken = session.refresh_token;
         window._currentUid   = session.user.id;
-        // Guardar sesión + timestamp de último uso (para inactividad de 3 días)
-        localStorage.setItem('cierralo_session', JSON.stringify({
-          access_token:  session.access_token,
-          refresh_token: session.refresh_token,
-          ultimo_uso:    Date.now()
-        }));
+        // Guardar timestamp de último uso por separado (inactividad 3 días)
+        // La sesión la guarda Supabase en su clave nativa automáticamente
+        localStorage.setItem('cierralo_ultimo_uso', String(Date.now()));
         currentUser = session.user;
 
         if (!appIniciada) {
@@ -109,40 +106,49 @@ window.addEventListener('load', async () => {
   });
 
   // ── Restaurar sesión guardada ──
-  const sesionRaw = localStorage.getItem('cierralo_session');
-  if (sesionRaw) {
-    try {
-      const sesion = JSON.parse(sesionRaw);
+  // Verificar inactividad de 3 días
+  const TRES_DIAS = 3 * 24 * 60 * 60 * 1000;
+  const ultimoUso = parseInt(localStorage.getItem('cierralo_ultimo_uso') || '0');
+  if (ultimoUso > 0 && (Date.now() - ultimoUso) > TRES_DIAS) {
+    console.log('[Auth] Inactividad de 3 días — cerrando sesión');
+    localStorage.removeItem('cierralo_ultimo_uso');
+    await sb.auth.signOut();
+    lanzarLogin(fallback);
+    return;
+  }
 
-      // Cerrar sesión si lleva más de 3 días sin usar la app
-      const TRES_DIAS = 3 * 24 * 60 * 60 * 1000;
-      if (sesion?.ultimo_uso && (Date.now() - sesion.ultimo_uso) > TRES_DIAS) {
-        console.log('[Auth] Inactividad de 3 días — cerrando sesión');
-        localStorage.removeItem('cierralo_session');
-        lanzarLogin(fallback);
-        return;
-      }
-
-      if (sesion?.refresh_token) {
-        const { error } = await sb.auth.refreshSession({ refresh_token: sesion.refresh_token });
-        if (error) {
-          console.warn('[Auth] refreshSession falló:', error.message);
-          // Limpiar sesión inválida
-          localStorage.removeItem('cierralo_session');
-          clearTimeout(fallback);
-          if (!appIniciada) {
-            document.getElementById('splash').classList.add('hidden');
-            showPage('login');
+  // Intentar restaurar sesión desde la clave nativa de Supabase
+  try {
+    const { data: { session }, error } = await sb.auth.getSession();
+    if (session?.user) {
+      // Supabase ya tiene sesión válida — onAuthStateChange disparará INITIAL_SESSION
+      console.log('[Auth] Sesión existente detectada:', session.user.id);
+      // No hacer nada — INITIAL_SESSION lo maneja
+    } else {
+      // No hay sesión guardada — intentar con refresh token si hay uno
+      const authRaw = localStorage.getItem('sb-nkjradximipkrzscgvhv-auth-token');
+      if (authRaw) {
+        try {
+          const authData = JSON.parse(authRaw);
+          const refreshToken = authData?.refresh_token || authData?.[0]?.refresh_token;
+          if (refreshToken) {
+            const { error: rErr } = await sb.auth.refreshSession({ refresh_token: refreshToken });
+            if (rErr) {
+              console.warn('[Auth] refreshSession falló:', rErr.message);
+              lanzarLogin(fallback);
+            }
+            // Si ok, SIGNED_IN se dispara automáticamente
+          } else {
+            lanzarLogin(fallback);
           }
+        } catch(e) {
+          lanzarLogin(fallback);
         }
-        // Si ok, onAuthStateChange dispara SIGNED_IN automáticamente
       } else {
         lanzarLogin(fallback);
       }
-    } catch (e) {
-      lanzarLogin(fallback);
     }
-  } else {
+  } catch(e) {
     lanzarLogin(fallback);
   }
 });
@@ -737,6 +743,7 @@ function populateApp() {
 // ════════════════════════════════════════════════════════
 async function signOut() {
   window._signOutExplicito = true;
+  localStorage.removeItem('cierralo_ultimo_uso');
   localStorage.removeItem('cierralo_session');
   localStorage.removeItem('cierralo_otp_tel');
   appIniciada  = false;
