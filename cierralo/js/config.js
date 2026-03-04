@@ -9,11 +9,10 @@ const { createClient } = supabase;
 const SUPABASE_AUTH_KEY = 'sb-nkjradximipkrzscgvhv-auth-token';
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY, {
   auth: {
-    flowType:           'pkce',
+    flowType:           'implicit',  // token en hash — funciona en PC y móvil
     persistSession:     true,
     autoRefreshToken:   true,
     detectSessionInUrl: true,
-    // Usar clave nativa de Supabase — no la sobreescribimos
   }
 });
 
