@@ -1436,11 +1436,12 @@ async function cargarPlanVendedor() {
   window.esPrecioLanzamiento = window.esPrecioLanzamiento || false;
 
   try {
-    if (currentUser && currentUser.id) {
-      const { data: v, error: ev } = await sb.from('vendedores')
+    const uid = currentUser?.id || window._currentUid;
+    if (uid) {
+      const { data: v, error: ev } = await sbAuth().from('vendedores')
         .select('plan, plan_fundador')
-        .eq('id', currentUser.id)
-        .single();
+        .eq('id', uid)
+        .maybeSingle();
       if (ev) console.warn('cargarPlanVendedor vendedor error:', ev.message);
       if (v) {
         window.planActual = v.plan || 'gratis';
