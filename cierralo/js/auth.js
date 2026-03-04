@@ -5,8 +5,7 @@
 // Depende de: config.js (carga primero)
 // ═══════════════════════════════════════════════════════════
 
-// Variable para guardar teléfono durante flujo SMS
-let _loginTelefono = '';
+// _loginTelefono se declara en config.js — no redeclarar aquí
 let _reenvioInterval = null;
 
 // ════════════════════════════════════════════════════════
