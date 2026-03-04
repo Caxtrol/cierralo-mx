@@ -28,7 +28,7 @@ function sbAuth() {
         persistSession:     false,
         autoRefreshToken:   false,
         detectSessionInUrl: false,
-        storageKey:         'cierralo_sbauth_tmp'
+        storageKey:         'cierralo_sbauth_' + token.slice(-8)
       }
     });
     _sbAuthClient._token = token;
