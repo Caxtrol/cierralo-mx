@@ -11,8 +11,11 @@
 /css/*              /css/:splat         200
 /js/*               /js/:splat          200
 
-# Raíz — siempre index.html (incluye regreso de OAuth de Google)
-/                   /index.html         200
+# Raíz — landing pública
+/                   /landing.html       200
+
+# App del vendedor — login, se instala como PWA
+/app                /index.html         200
 
 # Páginas legales — públicas, sin login
 /terminos           /terminos.html      200
