@@ -1,26 +1,24 @@
 // ═══════════════════════════════════════════════════════════
 // AUTH.JS — Ciérralo.mx
 // Sistema: Google OAuth + SMS OTP + PIN legacy
-// Sesión 13 — Marzo 2026
+// Sesión 14 — Fix OAuth congelado
 // Depende de: config.js (carga primero)
 // ═══════════════════════════════════════════════════════════
 
-// _loginTelefono se declara en config.js — no redeclarar aquí
 let _reenvioInterval = null;
 
 // ════════════════════════════════════════════════════════
 // INIT — al cargar la página
 // ════════════════════════════════════════════════════════
 window.addEventListener('load', async () => {
-  // ── Fallback de seguridad — registrar PRIMERO antes de cualquier async ──
-  // Si algo falla, en 6 segundos muestra el login de todas formas
+
+  // ── Fallback de seguridad ──
   const fallback = setTimeout(() => {
-    console.warn('[Auth] Fallback activado — mostrando login');
+    console.warn('[Auth] Fallback 6s — mostrando login');
     document.getElementById('splash').classList.add('hidden');
     if (!appIniciada) showPage('login');
   }, 6000);
 
-  // ── Fallback de emergencia en 10s por si el de 6s también falla ──
   setTimeout(() => {
     const splash = document.getElementById('splash');
     if (splash && !splash.classList.contains('hidden')) {
@@ -29,45 +27,7 @@ window.addEventListener('load', async () => {
     }
   }, 10000);
 
-  // ── Detectar regreso de Google OAuth ──
-  // Implicit flow manda #access_token= en el hash
-  // detectSessionInUrl:true en config.js ya lo procesa — solo necesitamos esperar
-  const hash = window.location.hash;
-  const searchParams = new URLSearchParams(window.location.search);
-
-  if (hash && hash.includes('access_token')) {
-    clearTimeout(fallback);
-    console.log('[Auth] Token OAuth en hash — dejando que Supabase lo procese');
-    // NO limpiar el hash todavía — Supabase necesita leerlo con detectSessionInUrl
-    // onAuthStateChange disparará SIGNED_IN automáticamente
-    // Fallback por si Supabase tarda más de 8s
-    window._fallbackOAuth = setTimeout(() => {
-      if (!appIniciada) {
-        console.warn('[Auth] OAuth timeout — mostrando login');
-        document.getElementById('splash').classList.add('hidden');
-        showPage('login');
-        showToast('❌ No se pudo entrar con Google. Intenta de nuevo.');
-      }
-    }, 20000);
-    return;
-  }
-
-  // PKCE fallback: ?code= en query string
-  if (searchParams.get('code')) {
-    clearTimeout(fallback);
-    console.log('[Auth] Código OAuth en URL — Supabase lo procesa');
-    window.history.replaceState(null, '', window.location.pathname);
-    window._fallbackOAuth = setTimeout(() => {
-      if (!appIniciada) {
-        document.getElementById('splash').classList.add('hidden');
-        showPage('login');
-        showToast('❌ No se pudo entrar con Google. Intenta de nuevo.');
-      }
-    }, 20000);
-    return;
-  }
-
-  // Hora del día en dashboard
+  // ── Hora del día ──
   const h = new Date().getHours();
   const greetEl = document.getElementById('greeting-time');
   if (greetEl) {
@@ -76,24 +36,24 @@ window.addEventListener('load', async () => {
     else             greetEl.textContent = 'Buenas noches 🌙';
   }
 
-  // Mes actual en dashboard
   const meses = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
   const mesEl = document.getElementById('dash-mes');
   if (mesEl) mesEl.textContent = meses[new Date().getMonth()] + ' ' + new Date().getFullYear();
 
-  // ── onAuthStateChange: ÚNICA fuente de verdad ──
+  // ════════════════════════════════════════════════════════
+  // FIX CRÍTICO: onAuthStateChange se registra PRIMERO
+  // ANTES de detectar el hash — así siempre está escuchando
+  // cuando Supabase dispara SIGNED_IN tras procesar el token
+  // ════════════════════════════════════════════════════════
   sb.auth.onAuthStateChange(async (event, session) => {
     console.log('[Auth]', event, session?.user?.id || 'sin sesión');
 
     if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'INITIAL_SESSION') {
       if (session?.user) {
-        // Cancelar fallback de OAuth si estaba corriendo
         if (window._fallbackOAuth) { clearTimeout(window._fallbackOAuth); window._fallbackOAuth = null; }
         window._authToken    = session.access_token;
         window._refreshToken = session.refresh_token;
         window._currentUid   = session.user.id;
-        // Guardar timestamp de último uso por separado (inactividad 3 días)
-        // La sesión la guarda Supabase en su clave nativa automáticamente
         localStorage.setItem('cierralo_ultimo_uso', String(Date.now()));
         currentUser = session.user;
 
@@ -107,7 +67,6 @@ window.addEventListener('load', async () => {
     }
 
     if (event === 'SIGNED_OUT') {
-      // Supabase dispara SIGNED_OUT al renovar token — ignorar si no fue explícito
       if (window._signOutExplicito) {
         window._signOutExplicito = false;
         appIniciada  = false;
@@ -124,24 +83,54 @@ window.addEventListener('load', async () => {
     }
   });
 
+  // ── Detectar regreso de Google OAuth ──
+  const hash = window.location.hash;
+  const searchParams = new URLSearchParams(window.location.search);
+
+  if (hash && hash.includes('access_token')) {
+    clearTimeout(fallback);
+    console.log('[Auth] Token OAuth en hash — Supabase lo procesa, onAuthStateChange escuchando');
+    // NO limpiar el hash — Supabase necesita leerlo con detectSessionInUrl: true
+    // onAuthStateChange ya está registrado arriba — recibirá el SIGNED_IN
+    window._fallbackOAuth = setTimeout(() => {
+      if (!appIniciada) {
+        console.warn('[Auth] OAuth timeout 20s — mostrando login');
+        document.getElementById('splash').classList.add('hidden');
+        showPage('login');
+        showToast('❌ No se pudo entrar con Google. Intenta de nuevo.');
+      }
+    }, 20000);
+    return;
+  }
+
+  if (searchParams.get('code')) {
+    clearTimeout(fallback);
+    console.log('[Auth] Código OAuth en URL — Supabase lo procesa');
+    window.history.replaceState(null, '', window.location.pathname);
+    window._fallbackOAuth = setTimeout(() => {
+      if (!appIniciada) {
+        document.getElementById('splash').classList.add('hidden');
+        showPage('login');
+        showToast('❌ No se pudo entrar con Google. Intenta de nuevo.');
+      }
+    }, 20000);
+    return;
+  }
+
   // ── Restaurar sesión guardada ──
-  // Verificar inactividad de 3 días
   const TRES_DIAS = 3 * 24 * 60 * 60 * 1000;
   const ultimoUso = parseInt(localStorage.getItem('cierralo_ultimo_uso') || '0');
   if (ultimoUso > 0 && (Date.now() - ultimoUso) > TRES_DIAS) {
-    console.log('[Auth] Inactividad de 3 días — cerrando sesión');
+    console.log('[Auth] Inactividad 3 días — cerrando sesión');
     localStorage.removeItem('cierralo_ultimo_uso');
     await sb.auth.signOut();
     lanzarLogin(fallback);
     return;
   }
 
-  // Intentar restaurar sesión — buscar refresh token en todas las claves posibles
   try {
-    // Buscar en todas las claves que Supabase puede usar (varía entre PC y móvil)
     let refreshToken = null;
 
-    // Clave principal en PC
     const authRaw = localStorage.getItem('sb-nkjradximipkrzscgvhv-auth-token');
     if (authRaw) {
       try {
@@ -152,7 +141,6 @@ window.addEventListener('load', async () => {
       } catch(e) {}
     }
 
-    // Buscar en otras claves si no encontramos (móvil puede usar diferente clave)
     if (!refreshToken) {
       for (let i = 0; i < localStorage.length; i++) {
         const key = localStorage.key(i);
@@ -173,13 +161,10 @@ window.addEventListener('load', async () => {
         console.warn('[Auth] refreshSession falló:', rErr.message);
         lanzarLogin(fallback);
       }
-      // Si ok, onAuthStateChange dispara SIGNED_IN automáticamente
     } else {
-      // Sin refresh token — verificar si getSession tiene algo
       const { data: { session } } = await sb.auth.getSession();
       if (session?.user) {
-        console.log('[Auth] Sesión activa encontrada via getSession');
-        // INITIAL_SESSION lo manejará
+        console.log('[Auth] Sesión activa via getSession');
       } else {
         lanzarLogin(fallback);
       }
@@ -228,7 +213,6 @@ async function loginConGoogle() {
       redirectTo: 'https://cierralo.mx/app',
       skipBrowserRedirect: false,
       queryParams: { prompt: 'select_account', access_type: 'offline' },
-
     }
   });
 
@@ -248,7 +232,6 @@ async function loginConGoogleRegistro() {
       redirectTo: 'https://cierralo.mx/app',
       skipBrowserRedirect: false,
       queryParams: { prompt: 'select_account', access_type: 'offline' },
-
     }
   });
 
@@ -261,7 +244,6 @@ async function loginConGoogleRegistro() {
 // ════════════════════════════════════════════════════════
 // 2. LOGIN/REGISTRO CON SMS OTP
 // ════════════════════════════════════════════════════════
-// Paso 1: pedir número y enviar OTP
 async function enviarOTP() {
   const telInput = document.getElementById('sms-tel');
   if (!telInput) return;
@@ -287,8 +269,6 @@ async function enviarOTP() {
   }
 
   localStorage.setItem('cierralo_otp_tel', telefono);
-
-  // Mostrar pantalla de verificación
   const displayEl = document.getElementById('otp-tel-display');
   if (displayEl) displayEl.textContent = telefono;
   mostrarLoginStep('login-step-otp-verify');
@@ -297,7 +277,6 @@ async function enviarOTP() {
   iniciarContadorReenvio();
 }
 
-// Paso 2: verificar código OTP
 async function verificarOTP() {
   const telefono = _loginTelefono || localStorage.getItem('cierralo_otp_tel');
   if (!telefono) { mostrarLoginStep('login-step-sms-tel'); return; }
@@ -323,7 +302,6 @@ async function verificarOTP() {
     return;
   }
 
-  // Sesión creada — onAuthStateChange dispara SIGNED_IN → loadVendedor()
   window._authToken    = data.session.access_token;
   window._refreshToken = data.session.refresh_token;
   window._currentUid   = data.user.id;
@@ -337,7 +315,7 @@ async function verificarOTP() {
 }
 
 // ════════════════════════════════════════════════════════
-// 3. LOGIN CON PIN (usuarios legacy / ya registrados)
+// 3. LOGIN CON PIN (usuarios legacy)
 // ════════════════════════════════════════════════════════
 async function confirmarPin() {
   const telEl = document.getElementById('login-tel');
@@ -380,7 +358,6 @@ async function confirmarPin() {
   await loadVendedor();
 }
 
-// PIN legacy — registro nuevo (usuarios que ya tienen cuenta pin)
 async function registrarConPin() {
   const telEl = document.getElementById('login-tel-nuevo');
   if (!telEl) return;
@@ -410,7 +387,6 @@ async function registrarConPin() {
     return;
   }
 
-  // Puede que Supabase requiera login después del signUp
   if (!data.session) {
     const { data: loginData, error: loginErr } = await sb.auth.signInWithPassword({ email: emailFake, password });
     if (loginErr) { showToast('❌ ' + loginErr.message); return; }
@@ -584,13 +560,11 @@ async function loadVendedor() {
       window.dispatchEvent(new CustomEvent('cierralo:datosListos'));
 
     } else if (data) {
-      // Tiene registro pero no terminó onboarding
       vendedorData = data;
       _preLlenarNombreGoogle();
       showPage('onboarding');
 
     } else {
-      // Usuario nuevo — crear registro
       const esGoogle    = currentUser?.app_metadata?.provider === 'google';
       const emailReal   = esGoogle ? (currentUser?.email || null) : null;
       const telefonoReg = _loginTelefono
@@ -610,7 +584,6 @@ async function loadVendedor() {
 
       if (errInsert) {
         console.error('[Auth] Error creando vendedor:', errInsert);
-        // Si es duplicado (ya existe), cargar el existente
         if (errInsert.code === '23505') {
           const { data: reintento } = await sbAuth().from('vendedores')
             .select('*').eq('id', userId).maybeSingle();
@@ -647,7 +620,6 @@ async function loadVendedor() {
   }
 }
 
-// Pre-llenar nombre si viene de Google
 function _preLlenarNombreGoogle() {
   const nombreCompleto = currentUser?.user_metadata?.full_name || currentUser?.user_metadata?.name || '';
   if (nombreCompleto) {
@@ -712,7 +684,6 @@ async function obFinish() {
     ultimo_acceso:       new Date().toISOString()
   };
 
-  // Guardar email capturado si es usuario SMS
   const emailCapturado = document.getElementById('ob-email')?.value.trim();
   if (emailCapturado) datosGuardar.email = emailCapturado;
 
@@ -720,7 +691,6 @@ async function obFinish() {
     .update(datosGuardar).eq('id', uid);
 
   if (errUpdate) {
-    // Intentar upsert como fallback
     const { error: errUpsert } = await sbAuth().from('vendedores').upsert({
       id: uid,
       telefono: _loginTelefono || vendedorData?.telefono || '',
@@ -744,12 +714,11 @@ async function obFinish() {
 }
 
 // ════════════════════════════════════════════════════════
-// POPULATE APP — llenar UI con datos del vendedor
+// POPULATE APP
 // ════════════════════════════════════════════════════════
 function populateApp() {
   if (!vendedorData) return;
 
-  // Cerrar modales al entrar a la app
   document.querySelectorAll('.modal-overlay, .confirm-overlay, .modal-metodo').forEach(m => {
     m.classList.remove('open');
   });
@@ -849,7 +818,7 @@ async function cambiarPin() {
   const btn = document.getElementById('recovery-pin-btn');
   if (btn) { btn.textContent = 'Guardando...'; btn.disabled = true; }
 
-  const emailFake    = 'tel' + _recoveryTelefono.replace('+','') + '@gmail.com';
+  const emailFake     = 'tel' + _recoveryTelefono.replace('+','') + '@gmail.com';
   const nuevaPassword = 'PIN_' + pin + '_' + _recoveryTelefono;
 
   try {
@@ -884,7 +853,6 @@ async function cambiarPin() {
   }
 }
 
-// Helpers PIN recovery
 function pinRecInput(el, num) {
   const v = el.value.toString().replace(/[^0-9]/g,'').slice(-1);
   el.value = v; el.classList.toggle('filled', v !== '');
@@ -907,7 +875,6 @@ function pinRecConfKeydown(e, num) {
   }
 }
 
-// Enter en campos de texto para avanzar
 document.addEventListener('DOMContentLoaded', () => {
   const loginTelEl = document.getElementById('login-tel');
   if (loginTelEl) loginTelEl.addEventListener('keydown', e => {
@@ -930,14 +897,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
   if (esIOS && esSafari) {
     document.addEventListener('DOMContentLoaded', () => {
-      // Ocultar botones de Google
-      const googleWrap = document.getElementById('google-login-wrap');
+      const googleWrap    = document.getElementById('google-login-wrap');
       const googleRegWrap = document.getElementById('google-registro-wrap');
       if (googleWrap)    googleWrap.style.display = 'none';
       if (googleRegWrap) googleRegWrap.style.display = 'none';
 
-      // Mostrar avisos de PIN
-      const noticeLogin   = document.getElementById('iphone-pin-notice');
+      const noticeLogin    = document.getElementById('iphone-pin-notice');
       const noticeRegistro = document.getElementById('iphone-pin-notice-registro');
       if (noticeLogin)    noticeLogin.style.display = 'block';
       if (noticeRegistro) noticeRegistro.style.display = 'block';
