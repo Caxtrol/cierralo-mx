@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Política de Cancelación y Devolución — Cierralo.mx</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #09090F; --s1: #111118; --border: #2E2E42;
+  --orange: #FF6B35; --green: #22C55E; --red: #EF4444;
+  --text: #F0F0FA; --text2: #9090B0; --text3: #58587A;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+.nav {
+  position: sticky; top: 0; z-index: 100;
+  background: #09090Fcc; backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--border);
+  padding: 16px 24px;
+  display: flex; align-items: center; justify-content: space-between;
+}
+.nav-logo { font-family: 'Syne', sans-serif; font-size: 20px; font-weight: 800; color: var(--text); text-decoration: none; }
+.nav-logo span { color: var(--orange); }
+.nav-back { font-size: 13px; color: var(--text2); text-decoration: none; display: flex; align-items: center; gap: 6px; transition: color .2s; }
+.nav-back:hover { color: var(--orange); }
+.hero { padding: 60px 24px 40px; max-width: 760px; margin: 0 auto; border-bottom: 1px solid var(--border); }
+.hero-chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: #22C55E18; border: 1px solid #22C55E35;
+  border-radius: 20px; padding: 4px 12px;
+  font-size: 11px; font-weight: 700; color: var(--green);
+  letter-spacing: 1px; text-transform: uppercase; margin-bottom: 16px;
+}
+.hero h1 { font-family: 'Syne', sans-serif; font-size: 38px; font-weight: 800; line-height: 1.1; margin-bottom: 12px; }
+.hero-meta { font-size: 13px; color: var(--text3); display: flex; gap: 20px; flex-wrap: wrap; }
+.content { max-width: 760px; margin: 0 auto; padding: 40px 24px 80px; }
+
+/* RESUMEN VISUAL */
+.summary-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 40px; }
+.summary-card { background: #18181F; border: 1px solid var(--border); border-radius: 12px; padding: 16px; text-align: center; }
+.summary-icon { font-size: 28px; margin-bottom: 8px; }
+.summary-title { font-family: 'Syne', sans-serif; font-size: 13px; font-weight: 700; color: var(--text); margin-bottom: 4px; }
+.summary-desc { font-size: 11px; color: var(--text2); line-height: 1.5; }
+
+.section { margin-bottom: 40px; padding-bottom: 40px; border-bottom: 1px solid var(--border); }
+.section:last-child { border-bottom: none; }
+.section-num { font-family: 'Syne', sans-serif; font-size: 11px; font-weight: 700; color: var(--green); letter-spacing: 2px; text-transform: uppercase; margin-bottom: 8px; }
+.section h2 { font-family: 'Syne', sans-serif; font-size: 20px; font-weight: 700; color: var(--text); margin-bottom: 14px; }
+.section p { font-size: 14px; color: var(--text2); line-height: 1.8; margin-bottom: 12px; }
+.section p:last-child { margin-bottom: 0; }
+.section ul { list-style: none; margin: 12px 0; }
+.section ul li { font-size: 14px; color: var(--text2); line-height: 1.8; padding: 4px 0 4px 20px; position: relative; }
+.section ul li::before { content: ''; position: absolute; left: 0; top: 13px; width: 6px; height: 6px; border-radius: 50%; background: var(--green); }
+
+.yes-block { background: #22C55E10; border: 1px solid #22C55E25; border-left: 3px solid var(--green); border-radius: 8px; padding: 14px 16px; margin: 12px 0; }
+.no-block { background: #EF444410; border: 1px solid #EF444425; border-left: 3px solid var(--red); border-radius: 8px; padding: 14px 16px; margin: 12px 0; }
+.yes-block p, .no-block p { margin: 0; font-size: 13px; }
+.yes-block p { color: var(--green); }
+.no-block p { color: var(--red); }
+
+.steps { counter-reset: step; margin: 16px 0; }
+.step { display: flex; gap: 14px; align-items: flex-start; margin-bottom: 16px; }
+.step-num { counter-increment: step; content: counter(step); width: 32px; height: 32px; min-width: 32px; background: #FF6B3520; border: 1px solid #FF6B3540; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-family: 'Syne', sans-serif; font-size: 13px; font-weight: 800; color: var(--orange); }
+.step-content { flex: 1; padding-top: 6px; }
+.step-title { font-size: 14px; font-weight: 600; color: var(--text); margin-bottom: 4px; }
+.step-desc { font-size: 13px; color: var(--text2); line-height: 1.6; }
+
+.footer { background: var(--s1); border-top: 1px solid var(--border); padding: 32px 24px; text-align: center; }
+.footer-logo { font-family: 'Syne', sans-serif; font-size: 18px; font-weight: 800; color: var(--text); margin-bottom: 8px; }
+.footer-logo span { color: var(--orange); }
+.footer p { font-size: 12px; color: var(--text3); margin-bottom: 16px; }
+.footer-links { display: flex; gap: 20px; justify-content: center; flex-wrap: wrap; }
+.footer-links a { font-size: 12px; color: var(--text3); text-decoration: none; transition: color .2s; }
+.footer-links a:hover { color: var(--orange); }
+@media (max-width: 500px) { .summary-grid { grid-template-columns: 1fr; } .hero h1 { font-size: 28px; } }
+</style>
+</head>
+<body>
+
+<nav class="nav">
+  <a href="https://cierralo.mx" class="nav-logo">Ciérralo<span>.mx</span></a>
+  <a href="https://cierralo.mx" class="nav-back">← Regresar a la app</a>
+</nav>
+
+<div class="hero">
+  <div class="hero-chip">↩️ Cancelaciones</div>
+  <h1>Política de Cancelación y Devolución</h1>
+  <div class="hero-meta">
+    <span>📅 Última actualización: Marzo 2026</span>
+    <span>🇲🇽 Aplica en México</span>
+  </div>
+</div>
+
+<div class="content">
+
+  <!-- RESUMEN VISUAL -->
+  <div class="summary-grid">
+    <div class="summary-card">
+      <div class="summary-icon">🆓</div>
+      <div class="summary-title">Plan Gratuito</div>
+      <div class="summary-desc">Sin costo. Sin compromiso. Cancela cuando quieras.</div>
+    </div>
+    <div class="summary-card">
+      <div class="summary-icon">📅</div>
+      <div class="summary-title">Suscripciones</div>
+      <div class="summary-desc">Cancela en cualquier momento. Acceso hasta fin del período pagado.</div>
+    </div>
+    <div class="summary-card">
+      <div class="summary-icon">💰</div>
+      <div class="summary-title">Devoluciones</div>
+      <div class="summary-desc">Reembolso dentro de los primeros 7 días naturales del primer pago.</div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-num">01</div>
+    <h2>Cancelación de Suscripción</h2>
+    <p>El Usuario puede cancelar su suscripción en cualquier momento, sin penalizaciones ni cargos adicionales. La cancelación puede realizarse directamente desde la sección de "Perfil" dentro de la app, en el apartado de "Mi Plan".</p>
+    <div class="yes-block">
+      <p>✅ Al cancelar, conserva acceso completo hasta el último día del período ya pagado.</p>
+    </div>
+    <div class="no-block">
+      <p>❌ No se realizan cargos proporcionales por días no utilizados del período en curso.</p>
+    </div>
+    <p>Al término del período pagado, la cuenta pasará automáticamente al Plan Gratuito (hasta 25 prospectos), sin eliminación de datos.</p>
+  </div>
+
+  <div class="section">
+    <div class="section-num">02</div>
+    <h2>Política de Devolución</h2>
+    <p>Cierralo.mx ofrece una garantía de satisfacción para nuevos suscriptores:</p>
+    <ul>
+      <li><strong style="color:var(--text)">Primer pago de cualquier plan:</strong> Reembolso completo si se solicita dentro de los primeros 7 días naturales desde la fecha del cobro.</li>
+      <li><strong style="color:var(--text)">Renovaciones subsecuentes:</strong> No aplica reembolso una vez procesado el cargo de renovación.</li>
+      <li><strong style="color:var(--text)">Plan Elite (precio de fundador):</strong> Aplican las mismas condiciones de los 7 días para el primer pago.</li>
+    </ul>
+    <p>Las devoluciones se procesan al método de pago original en un plazo de 5 a 10 días hábiles, según el banco o institución financiera del Usuario.</p>
+  </div>
+
+  <div class="section">
+    <div class="section-num">03</div>
+    <h2>Casos en que NO Aplica Devolución</h2>
+    <ul>
+      <li>Pagos de renovación (segundo mes en adelante)</li>
+      <li>Solicitudes realizadas después de los 7 días naturales del primer pago</li>
+      <li>Cuentas suspendidas por violación a los Términos y Condiciones</li>
+      <li>Cuando el Usuario haya utilizado extensamente las funciones premium durante el período de garantía</li>
+    </ul>
+  </div>
+
+  <div class="section">
+    <div class="section-num">04</div>
+    <h2>Cómo Solicitar una Devolución</h2>
+    <div class="steps">
+      <div class="step">
+        <div class="step-num">1</div>
+        <div class="step-content">
+          <div class="step-title">Contáctanos dentro del período de garantía</div>
+          <div class="step-desc">Envía tu solicitud dentro de los primeros 7 días naturales desde tu primer pago a través de nuestro sitio web cierralo.mx.</div>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">2</div>
+        <div class="step-content">
+          <div class="step-title">Proporciona los datos de tu cuenta</div>
+          <div class="step-desc">Número de teléfono registrado y fecha aproximada del pago para localizar tu transacción.</div>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">3</div>
+        <div class="step-content">
+          <div class="step-title">Confirmamos en 24 horas</div>
+          <div class="step-desc">Verificamos tu solicitud y te confirmamos la devolución en máximo 1 día hábil.</div>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">4</div>
+        <div class="step-content">
+          <div class="step-title">Reembolso en 5–10 días hábiles</div>
+          <div class="step-desc">El reembolso se refleja en tu método de pago original según los tiempos de tu banco o institución financiera.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-num">05</div>
+    <h2>Métodos de Pago Aceptados</h2>
+    <p>Cierralo.mx acepta los siguientes métodos de pago a través de Conekta, procesador certificado PCI-DSS:</p>
+    <ul>
+      <li><strong style="color:var(--text)">OXXO Pay:</strong> Pago en efectivo en cualquier tienda OXXO de México</li>
+      <li><strong style="color:var(--text)">Transferencia SPEI:</strong> Pago mediante transferencia bancaria interbancaria</li>
+      <li><strong style="color:var(--text)">Tarjeta de crédito o débito:</strong> Visa, Mastercard y American Express</li>
+    </ul>
+    <p>Las devoluciones de pagos realizados en OXXO o SPEI se procesan mediante transferencia bancaria al número de cuenta que el Usuario proporcione al solicitar el reembolso.</p>
+  </div>
+
+  <div class="section">
+    <div class="section-num">06</div>
+    <h2>Eliminación de Datos al Cancelar</h2>
+    <p>Al cancelar una suscripción, los datos del Usuario <strong style="color:var(--text)">no son eliminados automáticamente</strong>. La cuenta pasa a Plan Gratuito y los datos permanecen disponibles.</p>
+    <p>Si el Usuario desea la eliminación completa de sus datos, puede solicitarlo expresamente a través de nuestros canales de contacto. Procesaremos la eliminación en un plazo de 30 días hábiles, conforme a la Ley Federal de Protección de Datos Personales.</p>
+  </div>
+
+  <div class="section">
+    <div class="section-num">07</div>
+    <h2>Contacto para Cancelaciones y Devoluciones</h2>
+    <p>Para cualquier gestión relacionada con cancelaciones o devoluciones:</p>
+    <ul>
+      <li>Sitio web: cierralo.mx</li>
+      <li>Horario de atención: Lunes a viernes, 9:00 a 18:00 hrs (Tiempo del Centro de México)</li>
+      <li>Tiempo de respuesta: Máximo 1 día hábil</li>
+    </ul>
+  </div>
+
+</div>
+
+<footer class="footer">
+  <div class="footer-logo">Ciérralo<span>.mx</span></div>
+  <p>La app que trabaja para el vendedor — no al revés.</p>
+  <div class="footer-links">
+    <a href="/terminos">Términos y Condiciones</a>
+    <a href="/privacidad">Aviso de Privacidad</a>
+    <a href="/cancelaciones">Política de Cancelación</a>
+    <a href="https://linkedin.com/company/cierralo-mx" target="_blank" rel="noopener">LinkedIn</a>
+  </div>
+</footer>
+
+</body>
+</html>

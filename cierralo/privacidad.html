@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Aviso de Privacidad — Cierralo.mx</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #09090F; --s1: #111118; --border: #2E2E42;
+  --orange: #FF6B35; --blue: #4A9EFF;
+  --text: #F0F0FA; --text2: #9090B0; --text3: #58587A;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+.nav {
+  position: sticky; top: 0; z-index: 100;
+  background: #09090Fcc; backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--border);
+  padding: 16px 24px;
+  display: flex; align-items: center; justify-content: space-between;
+}
+.nav-logo { font-family: 'Syne', sans-serif; font-size: 20px; font-weight: 800; color: var(--text); text-decoration: none; }
+.nav-logo span { color: var(--orange); }
+.nav-back { font-size: 13px; color: var(--text2); text-decoration: none; display: flex; align-items: center; gap: 6px; transition: color .2s; }
+.nav-back:hover { color: var(--orange); }
+.hero { padding: 60px 24px 40px; max-width: 760px; margin: 0 auto; border-bottom: 1px solid var(--border); }
+.hero-chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: #4A9EFF18; border: 1px solid #4A9EFF35;
+  border-radius: 20px; padding: 4px 12px;
+  font-size: 11px; font-weight: 700; color: var(--blue);
+  letter-spacing: 1px; text-transform: uppercase; margin-bottom: 16px;
+}
+.hero h1 { font-family: 'Syne', sans-serif; font-size: 38px; font-weight: 800; line-height: 1.1; margin-bottom: 12px; }
+.hero-meta { font-size: 13px; color: var(--text3); display: flex; gap: 20px; flex-wrap: wrap; }
+.content { max-width: 760px; margin: 0 auto; padding: 40px 24px 80px; }
+.section { margin-bottom: 40px; padding-bottom: 40px; border-bottom: 1px solid var(--border); }
+.section:last-child { border-bottom: none; }
+.section-num { font-family: 'Syne', sans-serif; font-size: 11px; font-weight: 700; color: var(--blue); letter-spacing: 2px; text-transform: uppercase; margin-bottom: 8px; }
+.section h2 { font-family: 'Syne', sans-serif; font-size: 20px; font-weight: 700; color: var(--text); margin-bottom: 14px; }
+.section p { font-size: 14px; color: var(--text2); line-height: 1.8; margin-bottom: 12px; }
+.section p:last-child { margin-bottom: 0; }
+.section ul { list-style: none; margin: 12px 0; }
+.section ul li { font-size: 14px; color: var(--text2); line-height: 1.8; padding: 4px 0 4px 20px; position: relative; }
+.section ul li::before { content: ''; position: absolute; left: 0; top: 13px; width: 6px; height: 6px; border-radius: 50%; background: var(--blue); }
+.highlight { background: #4A9EFF10; border: 1px solid #4A9EFF25; border-left: 3px solid var(--blue); border-radius: 8px; padding: 14px 16px; margin: 16px 0; }
+.highlight p { margin: 0; color: var(--text); font-size: 13px; }
+.arco-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin: 16px 0; }
+.arco-item { background: #18181F; border: 1px solid var(--border); border-radius: 10px; padding: 14px; }
+.arco-letter { font-family: 'Syne', sans-serif; font-size: 24px; font-weight: 800; color: var(--blue); margin-bottom: 4px; }
+.arco-name { font-size: 13px; font-weight: 600; color: var(--text); margin-bottom: 4px; }
+.arco-desc { font-size: 12px; color: var(--text2); line-height: 1.5; }
+.footer { background: var(--s1); border-top: 1px solid var(--border); padding: 32px 24px; text-align: center; }
+.footer-logo { font-family: 'Syne', sans-serif; font-size: 18px; font-weight: 800; color: var(--text); margin-bottom: 8px; }
+.footer-logo span { color: var(--orange); }
+.footer p { font-size: 12px; color: var(--text3); margin-bottom: 16px; }
+.footer-links { display: flex; gap: 20px; justify-content: center; flex-wrap: wrap; }
+.footer-links a { font-size: 12px; color: var(--text3); text-decoration: none; transition: color .2s; }
+.footer-links a:hover { color: var(--orange); }
+@media (max-width: 500px) { .arco-grid { grid-template-columns: 1fr; } .hero h1 { font-size: 28px; } }
+</style>
+</head>
+<body>
+
+<nav class="nav">
+  <a href="https://cierralo.mx" class="nav-logo">Ciérralo<span>.mx</span></a>
+  <a href="https://cierralo.mx" class="nav-back">← Regresar a la app</a>
+</nav>
+
+<div class="hero">
+  <div class="hero-chip">🔒 Privacidad</div>
+  <h1>Aviso de Privacidad</h1>
+  <div class="hero-meta">
+    <span>📅 Última actualización: Marzo 2026</span>
+    <span>🇲🇽 Ley Federal de Protección de Datos Personales</span>
+  </div>
+</div>
+
+<div class="content">
+
+  <div class="section">
+    <div class="section-num">01</div>
+    <h2>Identidad del Responsable</h2>
+    <p>Cierralo.mx, con domicilio en Monterrey, Nuevo León, México, es el responsable del tratamiento de sus datos personales conforme a lo establecido en la Ley Federal de Protección de Datos Personales en Posesión de los Particulares (LFPDPPP) y su Reglamento.</p>
+    <div class="highlight">
+      <p>Para ejercer sus derechos ARCO o presentar cualquier consulta sobre privacidad, puede contactarnos a través de nuestro sitio web: <strong>cierralo.mx</strong></p>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-num">02</div>
+    <h2>Datos Personales que Recabamos</h2>
+    <p>Para la prestación de nuestros servicios, recabamos los siguientes datos personales:</p>
+    <ul>
+      <li><strong style="color:var(--text)">Datos de identificación:</strong> Nombre completo</li>
+      <li><strong style="color:var(--text)">Datos de contacto:</strong> Número de teléfono celular</li>
+      <li><strong style="color:var(--text)">Datos de acceso:</strong> PIN de 4 dígitos (almacenado de forma cifrada)</li>
+      <li><strong style="color:var(--text)">Datos de uso:</strong> Información sobre prospectos, vehículos y actividad en la plataforma que el usuario ingresa voluntariamente</li>
+      <li><strong style="color:var(--text)">Datos técnicos:</strong> Dirección IP, tipo de dispositivo, navegador y sistema operativo</li>
+      <li><strong style="color:var(--text)">Datos de pago:</strong> Los datos de pago son procesados directamente por Conekta (procesador de pagos certificado PCI-DSS) y no son almacenados en nuestros servidores</li>
+    </ul>
+    <p>No recabamos datos personales sensibles en el sentido de la LFPDPPP.</p>
+  </div>
+
+  <div class="section">
+    <div class="section-num">03</div>
+    <h2>Finalidades del Tratamiento</h2>
+    <p><strong style="color:var(--text)">Finalidades primarias</strong> (necesarias para el servicio):</p>
+    <ul>
+      <li>Crear y administrar su cuenta de usuario en la Plataforma</li>
+      <li>Prestar los servicios de CRM y gestión de ventas contratados</li>
+      <li>Procesar pagos y gestionar su suscripción</li>
+      <li>Enviar notificaciones relacionadas con el uso de la Plataforma</li>
+      <li>Brindar soporte técnico y atención al cliente</li>
+      <li>Cumplir con obligaciones legales y fiscales</li>
+    </ul>
+    <p><strong style="color:var(--text)">Finalidades secundarias</strong> (puede oponerse):</p>
+    <ul>
+      <li>Envío de comunicaciones sobre nuevas funciones o actualizaciones del servicio</li>
+      <li>Análisis estadísticos agregados y anónimos para mejorar la Plataforma</li>
+    </ul>
+  </div>
+
+  <div class="section">
+    <div class="section-num">04</div>
+    <h2>Derechos ARCO</h2>
+    <p>Como titular de sus datos personales, usted tiene los siguientes derechos:</p>
+    <div class="arco-grid">
+      <div class="arco-item">
+        <div class="arco-letter">A</div>
+        <div class="arco-name">Acceso</div>
+        <div class="arco-desc">Conocer qué datos personales tenemos sobre usted y cómo los utilizamos.</div>
+      </div>
+      <div class="arco-item">
+        <div class="arco-letter">R</div>
+        <div class="arco-name">Rectificación</div>
+        <div class="arco-desc">Corregir sus datos cuando sean inexactos o incompletos.</div>
+      </div>
+      <div class="arco-item">
+        <div class="arco-letter">C</div>
+        <div class="arco-name">Cancelación</div>
+        <div class="arco-desc">Solicitar la eliminación de sus datos de nuestros registros.</div>
+      </div>
+      <div class="arco-item">
+        <div class="arco-letter">O</div>
+        <div class="arco-name">Oposición</div>
+        <div class="arco-desc">Oponerse al tratamiento de sus datos para finalidades secundarias.</div>
+      </div>
+    </div>
+    <p>Para ejercer sus derechos ARCO, envíe su solicitud a través de nuestro sitio web cierralo.mx. Daremos respuesta en un plazo no mayor a 20 días hábiles.</p>
+  </div>
+
+  <div class="section">
+    <div class="section-num">05</div>
+    <h2>Transferencia de Datos</h2>
+    <p>Sus datos personales pueden ser compartidos con los siguientes terceros para la prestación del servicio:</p>
+    <ul>
+      <li><strong style="color:var(--text)">Supabase Inc.</strong> — Proveedor de base de datos e infraestructura cloud (servidores en EE.UU.)</li>
+      <li><strong style="color:var(--text)">Netlify Inc.</strong> — Proveedor de hosting y entrega de contenido</li>
+      <li><strong style="color:var(--text)">Conekta S.A. de C.V.</strong> — Procesador de pagos certificado PCI-DSS</li>
+      <li><strong style="color:var(--text)">Anthropic PBC</strong> — Proveedor de inteligencia artificial para generación de mensajes (solo datos no identificables)</li>
+    </ul>
+    <p>No vendemos, arrendamos ni cedemos sus datos personales a terceros con fines comerciales o publicitarios.</p>
+  </div>
+
+  <div class="section">
+    <div class="section-num">06</div>
+    <h2>Seguridad de los Datos</h2>
+    <p>Implementamos medidas técnicas y organizativas para proteger sus datos personales:</p>
+    <ul>
+      <li>Transmisión cifrada mediante HTTPS/TLS en toda la Plataforma</li>
+      <li>PIN de acceso almacenado con hash seguro — nunca en texto plano</li>
+      <li>Acceso restringido a datos por parte del equipo interno</li>
+      <li>Respaldos automáticos de la base de datos</li>
+      <li>Infraestructura con Row Level Security (RLS) — cada usuario solo accede a sus propios datos</li>
+    </ul>
+  </div>
+
+  <div class="section">
+    <div class="section-num">07</div>
+    <h2>Uso de Cookies y Tecnologías Similares</h2>
+    <p>La Plataforma utiliza almacenamiento local del navegador (localStorage) para mantener su sesión activa y mejorar su experiencia de uso. No utilizamos cookies de rastreo de terceros ni publicidad comportamental.</p>
+    <p>Puede limpiar el almacenamiento local de su navegador en cualquier momento, lo que cerrará su sesión en la Plataforma.</p>
+  </div>
+
+  <div class="section">
+    <div class="section-num">08</div>
+    <h2>Cambios al Aviso de Privacidad</h2>
+    <p>Nos reservamos el derecho de actualizar este Aviso de Privacidad en cualquier momento. Cualquier cambio será notificado a través de la Plataforma o al número de teléfono registrado. Le recomendamos revisar periódicamente este aviso.</p>
+  </div>
+
+  <div class="section">
+    <div class="section-num">09</div>
+    <h2>Autoridad Supervisora</h2>
+    <p>Si considera que sus derechos no han sido atendidos adecuadamente, puede presentar una queja ante el Instituto Nacional de Transparencia, Acceso a la Información y Protección de Datos Personales (INAI) en <strong style="color:var(--text)">www.inai.org.mx</strong></p>
+  </div>
+
+</div>
+
+<footer class="footer">
+  <div class="footer-logo">Ciérralo<span>.mx</span></div>
+  <p>La app que trabaja para el vendedor — no al revés.</p>
+  <div class="footer-links">
+    <a href="/terminos">Términos y Condiciones</a>
+    <a href="/privacidad">Aviso de Privacidad</a>
+    <a href="/cancelaciones">Política de Cancelación</a>
+    <a href="https://linkedin.com/company/cierralo-mx" target="_blank" rel="noopener">LinkedIn</a>
+  </div>
+</footer>
+
+</body>
+</html>
