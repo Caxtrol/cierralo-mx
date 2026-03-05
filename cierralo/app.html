@@ -26,7 +26,8 @@
 </div>
 
 <!-- ══════════════════════════════════════════════
-     LOGIN — Sistema nuevo: Google + SMS + PIN
+     LOGIN — Google + Email OTP + PIN
+     SESIÓN 15: SMS reemplazado por Email OTP
 ══════════════════════════════════════════════ -->
 <div class="page" id="page-login">
   <div class="login-logo">Ciérralo<span>.mx</span></div>
@@ -59,20 +60,19 @@
     <!-- Aviso iPhone — visible solo en Safari iOS -->
     <div id="iphone-pin-notice" style="display:none;background:#1a1a2e;border:1px solid #FF6B3540;border-radius:12px;padding:12px 14px;margin-bottom:12px;text-align:center;">
       <div style="font-size:20px;margin-bottom:4px;">🍎</div>
-      <div style="font-size:13px;font-weight:700;color:#FF6B35;margin-bottom:4px;">En iPhone usa tu PIN</div>
-      <div style="font-size:11px;color:#9090B0;line-height:1.5;">Safari bloquea el login con Google en iPhone. Usa tu número y PIN — es más rápido.</div>
+      <div style="font-size:13px;font-weight:700;color:#FF6B35;margin-bottom:4px;">En iPhone usa tu correo y PIN</div>
+      <div style="font-size:11px;color:#9090B0;line-height:1.5;">Safari bloquea el login con Google en iPhone. Usa tu correo y PIN — es más rápido.</div>
     </div>
 
     <div class="login-divisor">
-      <span>o ingresa con número y PIN</span>
+      <span>o ingresa con correo y PIN</span>
     </div>
 
-    <!-- Número + PIN -->
+    <!-- Correo + PIN -->
     <div class="field-group" style="margin-top:12px;">
-      <div class="field-label">Número de WhatsApp</div>
-      <input class="field-input" type="tel" id="login-tel" placeholder="81 2345 6789"
-        autocomplete="tel" maxlength="15"
-        oninput="this.value=this.value.replace(/[^0-9 ]/g,'')">
+      <div class="field-label">Correo electrónico</div>
+      <input class="field-input" type="email" id="login-tel" placeholder="tucorreo@ejemplo.com"
+        autocomplete="email" inputmode="email">
     </div>
     <div class="field-label" style="margin-bottom:8px;">Tu PIN de 4 dígitos</div>
     <div class="pin-row" style="margin-top:0;margin-bottom:20px;">
@@ -111,44 +111,31 @@
     <!-- Aviso iPhone — visible solo en Safari iOS -->
     <div id="iphone-pin-notice-registro" style="display:none;background:#1a1a2e;border:1px solid #FF6B3540;border-radius:12px;padding:12px 14px;margin-bottom:12px;text-align:center;">
       <div style="font-size:20px;margin-bottom:4px;">🍎</div>
-      <div style="font-size:13px;font-weight:700;color:#FF6B35;margin-bottom:4px;">En iPhone usa número y PIN</div>
-      <div style="font-size:11px;color:#9090B0;line-height:1.5;">Safari bloquea el login con Google en iPhone. Regístrate con tu número — tarda 30 segundos.</div>
+      <div style="font-size:13px;font-weight:700;color:#FF6B35;margin-bottom:4px;">En iPhone usa correo y PIN</div>
+      <div style="font-size:11px;color:#9090B0;line-height:1.5;">Safari bloquea el login con Google en iPhone. Regístrate con tu correo — tarda 30 segundos.</div>
     </div>
 
     <div class="login-divisor">
-      <span>o verifica tu número</span>
+      <span>o regístrate con tu correo</span>
     </div>
 
-    <!-- SMS OTP -->
+    <!-- Email OTP -->
     <div class="field-group" style="margin-top:12px;">
-      <div class="field-label">Número de WhatsApp</div>
-      <div style="display:flex;gap:8px;align-items:center;">
-        <div style="background:var(--s2);border:1px solid var(--border);border-radius:var(--rs);
-          padding:13px 10px;font-size:14px;color:var(--text2);white-space:nowrap;flex-shrink:0;">🇲🇽 +52</div>
-        <input class="field-input" type="tel" id="sms-tel" placeholder="81 2345 6789"
-          autocomplete="tel" maxlength="14" style="flex:1;"
-          oninput="this.value=this.value.replace(/[^0-9 ]/g,'')">
-      </div>
+      <div class="field-label">Correo electrónico</div>
+      <input class="field-input" type="email" id="sms-tel" placeholder="tucorreo@ejemplo.com"
+        autocomplete="email" inputmode="email">
       <div style="font-size:10px;color:var(--text3);margin-top:5px;">
-        📱 Te enviaremos un código por SMS para verificar que eres tú
+        📧 Te enviaremos un código de 6 dígitos para verificar que eres tú
       </div>
     </div>
-    <button class="btn btn-p" id="btn-enviar-otp" onclick="enviarOTP()">Enviar código SMS →</button>
-
-    <div class="login-divisor" style="margin-top:14px;">
-      <span>¿ya tienes PIN desde antes?</span>
-    </div>
-    <div style="text-align:center;margin-top:10px;">
-      <span style="font-size:12px;color:var(--text3);cursor:pointer;text-decoration:underline;"
-        onclick="mostrarLoginStep('login-step-pin-nuevo')">Registrarme con número + PIN →</span>
-    </div>
+    <button class="btn btn-p" id="btn-enviar-otp" onclick="enviarOTP()">Enviar código al correo →</button>
 
     <div class="login-back" onclick="mostrarLoginStep('login-step-inicio')">← Regresar</div>
   </div>
 
-  <!-- ── SMS OTP: VERIFICAR CÓDIGO ── -->
+  <!-- ── EMAIL OTP: VERIFICAR CÓDIGO ── -->
   <div class="login-card login-step" id="login-step-otp-verify">
-    <div class="login-title">Verificar número 📱</div>
+    <div class="login-title">Verificar correo 📧</div>
     <div class="login-sub">Ingresa el código de 6 dígitos enviado a <strong id="otp-tel-display"></strong></div>
 
     <div class="otp-row">
@@ -172,7 +159,7 @@
         oninput="otpInput(this,6)" onkeydown="otpKeydown(event,6)">
     </div>
     <div style="font-size:11px;color:var(--text3);text-align:center;margin-bottom:16px;">
-      El código llega en menos de 1 minuto · Válido por 10 minutos
+      El código llega en menos de 1 minuto · Válido por 10 minutos · Revisa también tu carpeta de spam
     </div>
 
     <button class="btn btn-p" id="btn-verificar-otp" onclick="verificarOTP()">Verificar →</button>
@@ -182,20 +169,14 @@
         style="background:none;border:none;color:var(--text3);font-size:12px;cursor:pointer;font-family:'DM Sans',sans-serif;"
         disabled>Reenviar (60s)</button>
     </div>
-    <div class="login-back" onclick="mostrarLoginStep('login-step-registro')">← Cambiar número</div>
+    <div class="login-back" onclick="mostrarLoginStep('login-step-registro')">← Cambiar correo</div>
   </div>
 
-  <!-- ── REGISTRO LEGACY: número + PIN nuevo ── -->
-  <div class="login-card login-step" id="login-step-pin-nuevo">
-    <div class="login-title">Crear cuenta con PIN 🔑</div>
-    <div class="login-sub">Ingresa tu número y elige un PIN de 4 dígitos.</div>
-    <div class="field-group">
-      <div class="field-label">Número de WhatsApp</div>
-      <input class="field-input" type="tel" id="login-tel-nuevo" placeholder="81 2345 6789"
-        autocomplete="tel" maxlength="15"
-        oninput="this.value=this.value.replace(/[^0-9 ]/g,'')">
-    </div>
-    <div class="field-label" style="margin-bottom:8px;">Elige tu PIN</div>
+  <!-- ── ELEGIR PIN (paso 3 del registro — después de verificar email OTP) ── -->
+  <div class="login-card login-step" id="login-step-elegir-pin">
+    <div class="login-title">Elige tu PIN 🔑</div>
+    <div class="login-sub">Este PIN de 4 dígitos es tu acceso rápido diario. Guárdalo en un lugar seguro.</div>
+    <div class="field-label" style="margin-bottom:8px;">PIN de 4 dígitos</div>
     <div class="pin-row" style="margin-top:0;margin-bottom:20px;">
       <input class="pin-digit" id="pin-n1" type="tel" inputmode="numeric" maxlength="1"
         autocomplete="off" autocorrect="off"
@@ -210,22 +191,20 @@
         autocomplete="off" autocorrect="off"
         oninput="pinNuevoInput(this,4)" onkeydown="pinNuevoKeydown(event,4)">
     </div>
-    <button class="btn btn-p" id="login-nuevo-btn" onclick="registrarConPin()">Crear cuenta →</button>
-    <div class="login-back" onclick="mostrarLoginStep('login-step-registro')">← Regresar</div>
-    <div class="login-note">Este PIN es solo para esta app. Guárdalo en un lugar seguro.</div>
+    <button class="btn btn-p" id="login-nuevo-btn" onclick="guardarPinNuevo()">Empezar a vender 🚀</button>
+    <div class="login-note" style="margin-top:12px;">Si olvidas tu PIN puedes recuperarlo con tu correo electrónico.</div>
   </div>
 
-  <!-- ── RECUPERACIÓN DE PIN — Paso 1: número ── -->
+  <!-- ── RECUPERACIÓN DE PIN — Paso 1: correo ── -->
   <div class="login-card login-step" id="login-step-recovery-tel">
     <div class="login-title">Recuperar PIN 🔓</div>
-    <div class="login-sub">Ingresa el número con el que te registraste.</div>
+    <div class="login-sub">Ingresa el correo con el que te registraste y te mandamos un código.</div>
     <div class="field-group">
-      <div class="field-label">Número de WhatsApp</div>
-      <input class="field-input" type="tel" id="recovery-tel" placeholder="81 2345 6789"
-        autocomplete="tel" maxlength="15"
-        oninput="this.value=this.value.replace(/[^0-9 ]/g,'')">
+      <div class="field-label">Correo electrónico</div>
+      <input class="field-input" type="email" id="recovery-tel" placeholder="tucorreo@ejemplo.com"
+        autocomplete="email" inputmode="email">
     </div>
-    <button class="btn btn-p" id="recovery-tel-btn" onclick="verificarTelRecuperacion()">Continuar →</button>
+    <button class="btn btn-p" id="recovery-tel-btn" onclick="verificarTelRecuperacion()">Enviar código →</button>
     <div class="login-back" onclick="mostrarLoginStep('login-step-opciones')">← Regresar al login</div>
   </div>
 
@@ -288,7 +267,6 @@
         <div class="field-label">Nombre de tu agencia</div>
         <input class="ob-input" type="text" id="ob-agencia" placeholder="Ej. Toyota Monterrey Norte">
       </div>
-      <!-- Correo para usuarios SMS (no Google) — se llena con JS si aplica -->
       <div class="field-group" id="ob-email-group" style="display:none;">
         <div class="field-label">Tu correo (para reportes y novedades)</div>
         <input class="ob-input" type="email" id="ob-email" placeholder="tucorreo@ejemplo.com" autocomplete="email">
@@ -333,7 +311,7 @@
   </div>
 </div>
 
-<!-- APP — igual que antes, sin cambios -->
+<!-- APP -->
 <div class="page" id="page-app">
   <header class="topbar">
     <div class="topbar-logo">Ciérralo<span>.mx</span></div>
@@ -536,7 +514,7 @@
 
 <div id="toast"></div>
 
-<!-- MODALES — sin cambios respecto al original -->
+<!-- MODALES -->
 <div class="confirm-overlay" id="modal-wrapped" onclick="cerrarModalSiFondo(event,'modal-wrapped')">
   <div class="modal" style="background:linear-gradient(180deg,#1A1A2E 0%,var(--s1) 100%);">
     <div class="modal-handle"></div>
