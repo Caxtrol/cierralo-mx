@@ -225,7 +225,7 @@ async function loginConGoogle() {
   const { error } = await sb.auth.signInWithOAuth({
     provider: 'google',
     options: {
-      redirectTo: 'https://cierralo.mx',
+      redirectTo: 'https://cierralo.mx/app',
       skipBrowserRedirect: false,
       queryParams: { prompt: 'select_account', access_type: 'offline' },
 
@@ -245,7 +245,7 @@ async function loginConGoogleRegistro() {
   const { error } = await sb.auth.signInWithOAuth({
     provider: 'google',
     options: {
-      redirectTo: 'https://cierralo.mx',
+      redirectTo: 'https://cierralo.mx/app',
       skipBrowserRedirect: false,
       queryParams: { prompt: 'select_account', access_type: 'offline' },
 
