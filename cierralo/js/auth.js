@@ -37,55 +37,18 @@ window.addEventListener('load', async () => {
 
   if (hash && hash.includes('access_token')) {
     clearTimeout(fallback);
-    console.log('[Auth] Token OAuth en hash — procesando manualmente (Safari iOS)');
-
-    // En Safari iOS detectSessionInUrl no siempre funciona — procesar manualmente
-    const params     = new URLSearchParams(hash.substring(1));
-    const accessToken  = params.get('access_token');
-    const refreshToken = params.get('refresh_token');
-
-    // Limpiar URL inmediatamente
-    window.history.replaceState(null, '', window.location.pathname);
-
-    if (accessToken && refreshToken) {
-      try {
-        // Guardar tokens directamente en localStorage con la clave nativa de Supabase
-        // Esto garantiza que Supabase los encuentre en cualquier navegador
-        const sessionData = {
-          access_token:  accessToken,
-          refresh_token: refreshToken,
-          token_type:    params.get('token_type') || 'bearer',
-          expires_in:    parseInt(params.get('expires_in') || '86400'),
-          expires_at:    Math.floor(Date.now() / 1000) + parseInt(params.get('expires_in') || '86400')
-        };
-        localStorage.setItem(SUPABASE_AUTH_KEY, JSON.stringify(sessionData));
-
-        // También establecer sesión en el cliente Supabase
-        const { error } = await sb.auth.setSession({
-          access_token:  accessToken,
-          refresh_token: refreshToken
-        });
-        if (error) {
-          console.warn('[Auth] setSession falló, intentando refreshSession:', error.message);
-          const { error: rErr } = await sb.auth.refreshSession({ refresh_token: refreshToken });
-          if (rErr) throw rErr;
-        }
-        // onAuthStateChange dispara SIGNED_IN — él toma el control
-      } catch (e) {
-        console.error('[Auth] Error procesando token OAuth:', e.message);
+    console.log('[Auth] Token OAuth en hash — dejando que Supabase lo procese');
+    // NO limpiar el hash todavía — Supabase necesita leerlo con detectSessionInUrl
+    // onAuthStateChange disparará SIGNED_IN automáticamente
+    // Fallback por si Supabase tarda más de 8s
+    window._fallbackOAuth = setTimeout(() => {
+      if (!appIniciada) {
+        console.warn('[Auth] OAuth timeout — mostrando login');
         document.getElementById('splash').classList.add('hidden');
         showPage('login');
-        showToast('❌ Error al entrar con Google. Intenta de nuevo.');
+        showToast('❌ No se pudo entrar con Google. Intenta de nuevo.');
       }
-    } else {
-      // Hash presente pero sin tokens — dejar que detectSessionInUrl lo intente
-      window._fallbackOAuth = setTimeout(() => {
-        if (!appIniciada) {
-          document.getElementById('splash').classList.add('hidden');
-          showPage('login');
-        }
-      }, 5000);
-    }
+    }, 8000);
     return;
   }
 
