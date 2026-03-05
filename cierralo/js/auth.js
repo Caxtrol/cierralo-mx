@@ -12,34 +12,95 @@ let _reenvioInterval = null;
 // INIT — al cargar la página
 // ════════════════════════════════════════════════════════
 window.addEventListener('load', async () => {
-  // Salud de pantalla por si algo falla
+  // ── Fallback de seguridad — registrar PRIMERO antes de cualquier async ──
+  // Si algo falla, en 6 segundos muestra el login de todas formas
   const fallback = setTimeout(() => {
+    console.warn('[Auth] Fallback activado — mostrando login');
     document.getElementById('splash').classList.add('hidden');
     if (!appIniciada) showPage('login');
-  }, 5000);
+  }, 6000);
+
+  // ── Fallback de emergencia en 10s por si el de 6s también falla ──
+  setTimeout(() => {
+    const splash = document.getElementById('splash');
+    if (splash && !splash.classList.contains('hidden')) {
+      splash.classList.add('hidden');
+      showPage('login');
+    }
+  }, 10000);
 
   // ── Detectar regreso de Google OAuth ──
   // Implicit flow manda #access_token= en el hash
+  // detectSessionInUrl:true en config.js ya lo procesa — solo necesitamos esperar
   const hash = window.location.hash;
+  const searchParams = new URLSearchParams(window.location.search);
+
   if (hash && hash.includes('access_token')) {
     clearTimeout(fallback);
-    console.log('[Auth] Token OAuth detectado en hash');
-    const params = new URLSearchParams(hash.substring(1));
+    console.log('[Auth] Token OAuth en hash — procesando manualmente (Safari iOS)');
+
+    // En Safari iOS detectSessionInUrl no siempre funciona — procesar manualmente
+    const params     = new URLSearchParams(hash.substring(1));
     const accessToken  = params.get('access_token');
     const refreshToken = params.get('refresh_token');
+
+    // Limpiar URL inmediatamente
     window.history.replaceState(null, '', window.location.pathname);
+
     if (accessToken && refreshToken) {
       try {
-        const { error } = await sb.auth.setSession({ access_token: accessToken, refresh_token: refreshToken });
-        if (error) throw error;
+        // Guardar tokens directamente en localStorage con la clave nativa de Supabase
+        // Esto garantiza que Supabase los encuentre en cualquier navegador
+        const sessionData = {
+          access_token:  accessToken,
+          refresh_token: refreshToken,
+          token_type:    params.get('token_type') || 'bearer',
+          expires_in:    parseInt(params.get('expires_in') || '86400'),
+          expires_at:    Math.floor(Date.now() / 1000) + parseInt(params.get('expires_in') || '86400')
+        };
+        localStorage.setItem(SUPABASE_AUTH_KEY, JSON.stringify(sessionData));
+
+        // También establecer sesión en el cliente Supabase
+        const { error } = await sb.auth.setSession({
+          access_token:  accessToken,
+          refresh_token: refreshToken
+        });
+        if (error) {
+          console.warn('[Auth] setSession falló, intentando refreshSession:', error.message);
+          const { error: rErr } = await sb.auth.refreshSession({ refresh_token: refreshToken });
+          if (rErr) throw rErr;
+        }
         // onAuthStateChange dispara SIGNED_IN — él toma el control
       } catch (e) {
-        console.error('[Auth] Error procesando token OAuth:', e);
+        console.error('[Auth] Error procesando token OAuth:', e.message);
         document.getElementById('splash').classList.add('hidden');
         showPage('login');
         showToast('❌ Error al entrar con Google. Intenta de nuevo.');
       }
+    } else {
+      // Hash presente pero sin tokens — dejar que detectSessionInUrl lo intente
+      window._fallbackOAuth = setTimeout(() => {
+        if (!appIniciada) {
+          document.getElementById('splash').classList.add('hidden');
+          showPage('login');
+        }
+      }, 5000);
     }
+    return;
+  }
+
+  // PKCE fallback: ?code= en query string
+  if (searchParams.get('code')) {
+    clearTimeout(fallback);
+    console.log('[Auth] Código OAuth en URL — Supabase lo procesa');
+    window.history.replaceState(null, '', window.location.pathname);
+    window._fallbackOAuth = setTimeout(() => {
+      if (!appIniciada) {
+        document.getElementById('splash').classList.add('hidden');
+        showPage('login');
+        showToast('❌ No se pudo entrar con Google. Intenta de nuevo.');
+      }
+    }, 8000);
     return;
   }
 
@@ -895,3 +956,28 @@ document.addEventListener('DOMContentLoaded', () => {
     if (e.key === 'Enter') enviarOTP();
   });
 });
+
+// ════════════════════════════════════════════════════════
+// DETECCIÓN SAFARI iOS — ocultar Google, mostrar aviso PIN
+// ════════════════════════════════════════════════════════
+(function detectarSafariIOS() {
+  const ua = navigator.userAgent;
+  const esIOS = /iPad|iPhone|iPod/.test(ua) && !window.MSStream;
+  const esSafari = /Safari/.test(ua) && !/CriOS|FxiOS|EdgiOS|OPiOS/.test(ua);
+
+  if (esIOS && esSafari) {
+    document.addEventListener('DOMContentLoaded', () => {
+      // Ocultar botones de Google
+      const googleWrap = document.getElementById('google-login-wrap');
+      const googleRegWrap = document.getElementById('google-registro-wrap');
+      if (googleWrap)    googleWrap.style.display = 'none';
+      if (googleRegWrap) googleRegWrap.style.display = 'none';
+
+      // Mostrar avisos de PIN
+      const noticeLogin   = document.getElementById('iphone-pin-notice');
+      const noticeRegistro = document.getElementById('iphone-pin-notice-registro');
+      if (noticeLogin)    noticeLogin.style.display = 'block';
+      if (noticeRegistro) noticeRegistro.style.display = 'block';
+    });
+  }
+})();
