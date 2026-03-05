@@ -48,7 +48,7 @@ window.addEventListener('load', async () => {
         showPage('login');
         showToast('❌ No se pudo entrar con Google. Intenta de nuevo.');
       }
-    }, 8000);
+    }, 20000);
     return;
   }
 
@@ -63,7 +63,7 @@ window.addEventListener('load', async () => {
         showPage('login');
         showToast('❌ No se pudo entrar con Google. Intenta de nuevo.');
       }
-    }, 8000);
+    }, 20000);
     return;
   }
 
