@@ -14,6 +14,11 @@
 # Raíz — siempre index.html (incluye regreso de OAuth de Google)
 /                   /index.html         200
 
+# Páginas legales — públicas, sin login
+/terminos           /terminos.html      200
+/privacidad         /privacidad.html    200
+/cancelaciones      /cancelaciones.html 200
+
 # Links de reseña: cierralo.mx/resena/TOKEN
 /resena/:token      /resena.html        200
 
