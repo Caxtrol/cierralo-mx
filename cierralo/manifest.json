@@ -2,7 +2,7 @@
   "name": "Ciérralo.mx",
   "short_name": "Ciérralo",
   "description": "La app que trabaja para el vendedor — no al revés",
-  "start_url": "/",
+  "start_url": "/app",
   "display": "standalone",
   "background_color": "#09090F",
   "theme_color": "#FF6B35",
