@@ -1,7 +1,7 @@
 # Ciérralo.mx — Reglas de redirección Netlify
 
 # Archivos estáticos — pasan directo
-/index.html         /index.html         200
+/app.html           /app.html           200
 /vendedor.html      /vendedor.html      200
 /resena.html        /resena.html        200
 /sw.js              /sw.js              200
@@ -15,7 +15,11 @@
 /                   /landing.html       200
 
 # App del vendedor — login, se instala como PWA
-/app                /index.html         200
+/app                /app.html           200
+
+# Google OAuth callback — regresa a / con #access_token=
+# Netlify lo sirve como landing pero el hash lo procesa el JS de app
+# El vendedor siempre entra por /app
 
 # Páginas legales — públicas, sin login
 /terminos           /terminos.html      200
