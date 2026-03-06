@@ -319,76 +319,54 @@ function setMsgLoading(loading){
   }
 }
 
-async function generarConIA(p, situacionId){
-  const key = window.GROQ_KEY;
-  if(!key || key === 'TU_GROQ_API_KEY_AQUI'){
-    throw new Error('API key no configurada');
+// ── GENERACIÓN CON IA — Claude Haiku via Edge Function (API key oculta en servidor) ──
+async function generarConIA(p, situacionId) {
+  // Obtener el token del vendedor autenticado
+  const token = window._authToken;
+  if (!token) {
+    throw new Error('Sin sesión activa');
   }
 
-  const sit = [...(SITUACIONES[p.etapa]||[]), ...SITUACIONES_GENERICAS].find(s => s.id === situacionId);
+  const sit = [...(SITUACIONES[p.etapa] || []), ...SITUACIONES_GENERICAS].find(s => s.id === situacionId);
   const nombreSituacion = sit?.nombre || situacionId;
-  const temp = calcTemp(p);
-  const etapa = ETAPAS[p.etapa] || ETAPAS.nuevo;
 
-  const vendedor = vendedorData?.nombre || 'el asesor';
-  const agencia = vendedorData?.agencia || 'la agencia';
-
-  const autoInfo = p.auto_interes
-    ? `Auto de interés: ${p.auto_interes}${p.presupuesto ? `, presupuesto: $${p.presupuesto.toLocaleString('es-MX')}` : ''}`
-    : 'Sin auto específico definido aún';
-
-  const systemPrompt = `Eres un asistente de ventas para vendedores de autos en México. 
-Tu trabajo es escribir mensajes de WhatsApp cortos, naturales y efectivos en español mexicano.
-
-REGLAS ABSOLUTAS:
-- Máximo 3 párrafos cortos
-- Tono cálido y cercano, NO robótico ni formal en exceso
-- Usar el nombre de pila del cliente
-- Incluir 1-2 emojis máximo, naturales
-- NO usar frases genéricas como "espero que estés muy bien" de forma repetitiva
-- El mensaje debe sonar como lo escribiría un vendedor real, no una IA
-- Terminar siempre con una pregunta o llamado a la acción claro
-- NO incluir firmas largas ni información de contacto`;
-
-  const userPrompt = `Escribe un mensaje de WhatsApp para la situación: "${nombreSituacion}"
-
-DATOS DEL PROSPECTO:
-- Nombre: ${p.nombre}
-- ${autoInfo}
-- Etapa en el pipeline: ${etapa.label}
-- Temperatura de interés: ${temp}° de 100
-- Notas adicionales: ${p.notas || 'Sin notas'}
-
-DATOS DEL VENDEDOR:
-- Nombre: ${vendedor}
-- Agencia: ${agencia}
-
-Escribe SOLO el mensaje, sin explicaciones ni comillas.`;
-
-  const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${key}`
-    },
-    body: JSON.stringify({
-      model: 'llama-3.1-8b-instant',
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: userPrompt }
-      ],
-      max_tokens: 300,
-      temperature: 0.75
-    })
-  });
-
-  if(!res.ok){
-    const err = await res.json().catch(()=>({error:{message:'Error desconocido'}}));
-    throw new Error(err.error?.message || `HTTP ${res.status}`);
-  }
+  const res = await fetch(
+    'https://nkjradximipkrzscgvhv.supabase.co/functions/v1/generar-mensaje',
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify({
+        situacion: nombreSituacion,
+        prospecto: {
+          nombre:       p.nombre,
+          etapa:        p.etapa,
+          temperatura:  calcTemp(p),
+          auto_interes: p.auto_interes || null,
+          presupuesto:  p.presupuesto  || null,
+          notas:        p.notas        || null
+        },
+        vendedorNombre: vendedorData?.nombre || null,
+        autoInteres:    p.auto_interes || null
+      })
+    }
+  );
 
   const data = await res.json();
-  return data.choices[0].message.content.trim();
+
+  // Plan alcanzó su límite — avisar y usar plantilla
+  if (res.status === 403 && data.error === 'limite_alcanzado') {
+    showToast(`🤖 ${data.mensaje}`);
+    throw new Error('limite_alcanzado');
+  }
+
+  if (!res.ok) {
+    throw new Error(data.error || `Error ${res.status}`);
+  }
+
+  return data.mensaje;
 }
 
 // ── ABRIR MENSAJES DESDE DETALLE DE PROSPECTO ──
