@@ -1,7 +1,7 @@
 // ═══════════════════════════════════════════════════════════
 // AUTH.JS — Ciérralo.mx
 // Sistema: Google OAuth + Email OTP (registro) + PIN (login)
-// Sesión 15 — Reemplaza SMS OTP por Email OTP
+// Sesión 15 — Fix: emailRedirectTo: null fuerza OTP numérico (no Magic Link)
 // Depende de: config.js (carga primero)
 // ═══════════════════════════════════════════════════════════
 
@@ -178,7 +178,7 @@ function irALogin()          { mostrarLoginStep('login-step-opciones'); }
 function irARegistro()       { mostrarLoginStep('login-step-registro'); }
 function volverAlInicio()    { mostrarLoginStep('login-step-inicio'); }
 function volverAlRegistro()  { mostrarLoginStep('login-step-registro'); }
-function volverATelefono()   { mostrarLoginStep('login-step-sms-tel'); }
+function volverATelefono()   { mostrarLoginStep('login-step-registro'); }
 
 // ════════════════════════════════════════════════════════
 // 1. LOGIN CON GOOGLE
@@ -211,7 +211,7 @@ async function loginConGoogleRegistro() {
 
 // ════════════════════════════════════════════════════════
 // 2. REGISTRO — PASO 1: Enviar OTP por email
-// El campo en HTML tiene id="sms-tel" (mismo ID, no cambiamos HTML)
+// FIX SESIÓN 15: emailRedirectTo: null → fuerza OTP numérico, NO Magic Link
 // ════════════════════════════════════════════════════════
 async function enviarOTP() {
   const emailInput = document.getElementById('sms-tel');
@@ -228,13 +228,17 @@ async function enviarOTP() {
   const btn = document.getElementById('btn-enviar-otp');
   if (btn) { btn.textContent = 'Enviando código...'; btn.disabled = true; }
 
-  // Supabase envía OTP de 6 dígitos al email — NO magic link
+  // ⚠️ CRÍTICO: emailRedirectTo: null fuerza OTP numérico de 6 dígitos
+  // Sin este parámetro, Supabase manda Magic Link en lugar del código
   const { error } = await sb.auth.signInWithOtp({
     email: email,
-    options: { shouldCreateUser: true }
+    options: {
+      shouldCreateUser: true,
+      emailRedirectTo: null   // null = OTP numérico | url/undefined = Magic Link
+    }
   });
 
-  if (btn) { btn.textContent = 'Enviar código →'; btn.disabled = false; }
+  if (btn) { btn.textContent = 'Enviar código al correo →'; btn.disabled = false; }
 
   if (error) {
     showToast('❌ ' + (error.message.includes('rate') || error.message.includes('limit')
@@ -260,7 +264,7 @@ async function verificarOTP() {
   if (window._modoRecuperacion) { await _verificarOTPRecuperacion(); return; }
 
   const email = _loginEmail || localStorage.getItem('cierralo_otp_email');
-  if (!email) { mostrarLoginStep('login-step-sms-tel'); return; }
+  if (!email) { mostrarLoginStep('login-step-registro'); return; }
 
   const codigo = getOtpValue();
   if (codigo.length < 6) { showToast('⚠️ Ingresa los 6 dígitos del código'); return; }
@@ -271,7 +275,7 @@ async function verificarOTP() {
   const { data, error } = await sb.auth.verifyOtp({
     email: email,
     token: codigo,
-    type:  'email'   // ← email OTP, no SMS
+    type:  'email'
   });
 
   if (btn) { btn.textContent = 'Verificar →'; btn.disabled = false; }
@@ -284,13 +288,12 @@ async function verificarOTP() {
   }
 
   // Email verificado — guardar sesión y pedir PIN
-  window._authToken      = data.session.access_token;
-  window._refreshToken   = data.session.refresh_token;
-  window._currentUid     = data.user.id;
+  window._authToken       = data.session.access_token;
+  window._refreshToken    = data.session.refresh_token;
+  window._currentUid      = data.user.id;
   window._emailVerificado = email;
   currentUser = data.user;
 
-  // Ir a elegir PIN
   mostrarLoginStep('login-step-elegir-pin');
   setTimeout(() => { const el = document.getElementById('pin-n1'); if (el) el.focus(); }, 200);
   showToast('✅ Correo verificado — ahora elige tu PIN');
@@ -309,10 +312,9 @@ async function guardarPinNuevo() {
   const btn = document.getElementById('login-nuevo-btn');
   if (btn) { btn.textContent = 'Guardando...'; btn.disabled = true; }
 
-  // Actualizar contraseña con el PIN elegido
   const { error } = await sb.auth.updateUser({ password: 'PIN_' + pin + '_' + email });
 
-  if (btn) { btn.textContent = 'Empezar →'; btn.disabled = false; }
+  if (btn) { btn.textContent = 'Empezar a vender 🚀'; btn.disabled = false; }
 
   if (error) {
     showToast('❌ Error al guardar PIN: ' + error.message);
@@ -328,10 +330,9 @@ async function guardarPinNuevo() {
 
 // ════════════════════════════════════════════════════════
 // 3. LOGIN CON PIN (usuarios ya registrados)
-// Flujo: email + PIN → signInWithPassword
 // ════════════════════════════════════════════════════════
 async function confirmarPin() {
-  const emailEl = document.getElementById('login-tel'); // mismo ID, no cambiamos HTML
+  const emailEl = document.getElementById('login-tel');
   if (!emailEl) return;
 
   const email = emailEl.value.trim().toLowerCase();
@@ -422,7 +423,11 @@ function iniciarContadorReenvio() {
 async function reenviarOTP() {
   const email = _loginEmail || _recoveryEmail || localStorage.getItem('cierralo_otp_email');
   if (!email) return;
-  const { error } = await sb.auth.signInWithOtp({ email, options: { shouldCreateUser: true } });
+  // FIX: emailRedirectTo: null también en reenvío
+  const { error } = await sb.auth.signInWithOtp({
+    email,
+    options: { shouldCreateUser: true, emailRedirectTo: null }
+  });
   if (error) { showToast('❌ ' + error.message); return; }
   showToast('📧 Nuevo código enviado a ' + email);
   limpiarOtp();
@@ -518,8 +523,12 @@ async function loadVendedor() {
           const { data: reintento } = await sbAuth().from('vendedores').select('*').eq('id', userId).maybeSingle();
           if (reintento) {
             vendedorData = reintento;
-            if (reintento.onboarding_completo) { populateApp(); showPage('app'); await cargarProspectos(userId); await cargarAutos(userId); }
-            else { _preLlenarNombreGoogle(); showPage('onboarding'); }
+            if (reintento.onboarding_completo) {
+              populateApp(); showPage('app');
+              await cargarProspectos(userId); await cargarAutos(userId);
+            } else {
+              _preLlenarNombreGoogle(); showPage('onboarding');
+            }
             return;
           }
         }
@@ -601,7 +610,11 @@ async function obFinish() {
   const { error: errUpdate } = await sbAuth().from('vendedores').update(datosGuardar).eq('id', uid);
   if (errUpdate) {
     const { error: errUpsert } = await sbAuth().from('vendedores').upsert({ id: uid, telefono: emailReal || '', ...datosGuardar });
-    if (errUpsert) { showToast('❌ Error: ' + errUpsert.message); if (btn) { btn.textContent = '¡Empezar a vender! 🚀'; btn.disabled = false; } return; }
+    if (errUpsert) {
+      showToast('❌ Error: ' + errUpsert.message);
+      if (btn) { btn.textContent = '¡Empezar a vender! 🚀'; btn.disabled = false; }
+      return;
+    }
   }
 
   if (!vendedorData) vendedorData = {};
@@ -660,7 +673,7 @@ async function signOut() {
 }
 
 // ════════════════════════════════════════════════════════
-// RECUPERACIÓN DE PIN — ahora por email OTP
+// RECUPERACIÓN DE PIN — por email OTP
 // ════════════════════════════════════════════════════════
 let _recoveryEmail = '';
 
@@ -687,13 +700,16 @@ async function verificarTelRecuperacion() {
   const { data } = await sb.from('vendedores').select('id').eq('email', email).maybeSingle();
   if (!data) {
     showToast('❌ No encontramos una cuenta con ese correo.');
-    if (btn) { btn.textContent = 'Continuar →'; btn.disabled = false; }
+    if (btn) { btn.textContent = 'Enviar código →'; btn.disabled = false; }
     return;
   }
 
-  // Enviar OTP de recuperación
-  const { error: otpErr } = await sb.auth.signInWithOtp({ email, options: { shouldCreateUser: false } });
-  if (btn) { btn.textContent = 'Continuar →'; btn.disabled = false; }
+  // FIX: emailRedirectTo: null fuerza OTP numérico
+  const { error: otpErr } = await sb.auth.signInWithOtp({
+    email,
+    options: { shouldCreateUser: false, emailRedirectTo: null }
+  });
+  if (btn) { btn.textContent = 'Enviar código →'; btn.disabled = false; }
   if (otpErr) { showToast('❌ Error: ' + otpErr.message); return; }
 
   _recoveryEmail = email;
@@ -720,9 +736,9 @@ async function _verificarOTPRecuperacion() {
 
   if (error) { showToast('❌ Código incorrecto o expirado.'); limpiarOtp(); return; }
 
-  window._authToken      = data.session.access_token;
-  window._refreshToken   = data.session.refresh_token;
-  window._currentUid     = data.user.id;
+  window._authToken       = data.session.access_token;
+  window._refreshToken    = data.session.refresh_token;
+  window._currentUid      = data.user.id;
   window._emailVerificado = email;
   currentUser = data.user;
   window._modoRecuperacion = false;
@@ -795,10 +811,14 @@ document.addEventListener('DOMContentLoaded', () => {
   if (emailOtpEl) emailOtpEl.addEventListener('keydown', e => {
     if (e.key === 'Enter') enviarOTP();
   });
+  const recoveryEl = document.getElementById('recovery-tel');
+  if (recoveryEl) recoveryEl.addEventListener('keydown', e => {
+    if (e.key === 'Enter') verificarTelRecuperacion();
+  });
 });
 
 // ════════════════════════════════════════════════════════
-// DETECCIÓN SAFARI iOS — ocultar Google, mostrar aviso PIN
+// DETECCIÓN SAFARI iOS — ocultar Google, mostrar aviso correo + PIN
 // ════════════════════════════════════════════════════════
 (function detectarSafariIOS() {
   const ua = navigator.userAgent;
