@@ -1,0 +1,4 @@
+[build]
+  base    = "cierralo"
+  publish = "cierralo"
+  command = "npx --yes tailwindcss@4 -i css/landing-input.css -o css/landing.css --minify"
