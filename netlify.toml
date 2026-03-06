@@ -1,4 +1,4 @@
 [build]
   base    = "cierralo"
   publish = "cierralo"
-  command = "npx --yes tailwindcss@4 -i css/landing-input.css -o css/landing.css --minify"
+  command = "npm install tailwindcss @tailwindcss/cli && npx @tailwindcss/cli -i css/landing-input.css -o css/landing.css --minify"
