@@ -54,6 +54,21 @@ window.addEventListener('load', async () => {
         localStorage.setItem('cierralo_ultimo_uso', String(Date.now()));
         currentUser = session.user;
 
+        // Si entró con Google OAuth, marcar pin_configurado automáticamente
+        // (Google no usa PIN — la sesión de Google es su "contraseña")
+        const esGoogle = session.user.app_metadata?.provider === 'google'
+          || session.user.identities?.some(i => i.provider === 'google');
+        if (esGoogle) {
+          // Marcar en BD sin bloquear el flujo
+          setTimeout(async () => {
+            try {
+              await sbAuth().from('vendedores')
+                .update({ pin_configurado: true })
+                .eq('id', session.user.id);
+            } catch(e) {}
+          }, 500);
+        }
+
         if (!appIniciada) {
           appIniciada = true;
           clearTimeout(fallback);
@@ -321,6 +336,12 @@ async function guardarPinNuevo() {
     return;
   }
 
+  // Marcar que el PIN ya fue configurado en la BD
+  const uid = currentUser?.id || window._currentUid;
+  if (uid) {
+    await sbAuth().from('vendedores').update({ pin_configurado: true }).eq('id', uid);
+  }
+
   localStorage.setItem('cierralo_login_email', email);
   localStorage.setItem('cierralo_ultimo_uso', String(Date.now()));
   appIniciada = true;
@@ -553,6 +574,23 @@ async function loadVendedor() {
 
 function _procesarVendedor(data, userId) {
   vendedorData = data;
+
+  // Si el usuario nunca configuró su PIN (entró por link de confirmación)
+  // mandarlo a elegir PIN antes de continuar
+  if (!data.pin_configurado) {
+    const emailReal = currentUser?.email || window._emailVerificado
+      || localStorage.getItem('cierralo_otp_email')
+      || localStorage.getItem('cierralo_login_email');
+    window._emailVerificado = emailReal;
+    _preLlenarNombreGoogle();
+    mostrarLoginStep('login-step-elegir-pin');
+    document.getElementById('splash')?.classList.add('hidden');
+    showPage('login');
+    setTimeout(() => { const el = document.getElementById('pin-n1'); if (el) el.focus(); }, 200);
+    showToast('🔐 Elige tu PIN de 4 dígitos para entrar rápido');
+    return;
+  }
+
   if (data.onboarding_completo) {
     populateApp();
     showPage('app');
