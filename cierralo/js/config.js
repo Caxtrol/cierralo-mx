@@ -10,7 +10,8 @@ const sb = createClient(SUPABASE_URL, SUPABASE_KEY, {
   auth: {
     persistSession:     true,
     autoRefreshToken:   true,
-    detectSessionInUrl: false,
+    flowType:           'implicit',
+    detectSessionInUrl: true,
     storageKey:         'cierralo_session',
   }
 });
