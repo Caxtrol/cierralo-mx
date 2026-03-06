@@ -489,58 +489,78 @@ async function loadVendedor() {
   if (!userId) { console.warn('[Auth] loadVendedor: sin userId'); return; }
 
   try {
+    // El trigger en Supabase ya creó la fila cuando el usuario se registró.
+    // Aquí solo leemos — nunca insertamos desde el frontend.
     const { data, error } = await sbAuth().from('vendedores')
       .select('*').eq('id', userId).maybeSingle();
 
-    if (error && error.code !== 'PGRST116') console.error('[Auth] Error cargando vendedor:', error);
-
-    if (data && data.onboarding_completo) {
-      vendedorData = data;
-      populateApp();
-      showPage('app');
-      await cargarProspectos(userId);
-      await cargarAutos(userId);
-      window.dispatchEvent(new CustomEvent('cierralo:datosListos'));
-
-    } else if (data) {
-      vendedorData = data;
-      _preLlenarNombreGoogle();
+    if (error) {
+      console.error('[Auth] Error cargando vendedor:', error);
+      // Si falla la lectura, esperar 1.5s y reintentar una vez
+      await new Promise(r => setTimeout(r, 1500));
+      const { data: retry } = await sbAuth().from('vendedores').select('*').eq('id', userId).maybeSingle();
+      if (retry) {
+        return _procesarVendedor(retry, userId);
+      }
+      // Si sigue fallando, mostrar onboarding con datos mínimos
+      vendedorData = { id: userId, onboarding_completo: false, plan: 'gratis' };
       showPage('onboarding');
+      return;
+    }
 
-    } else {
-      const emailReal = currentUser?.email
-        || window._emailVerificado
+    if (data) {
+      // Asegurarse de que el email esté guardado si llegó por Google/OTP
+      const emailReal = currentUser?.email || window._emailVerificado
         || localStorage.getItem('cierralo_otp_email')
-        || localStorage.getItem('cierralo_login_email')
-        || null;
+        || localStorage.getItem('cierralo_login_email');
 
-      const { data: nuevo, error: errInsert } = await sbAuth().from('vendedores')
-        .insert({ id: userId, telefono: emailReal || 'sin-telefono', email: emailReal, plan: 'gratis', onboarding_completo: false })
-        .select().single();
-
-      if (errInsert) {
-        if (errInsert.code === '23505') {
-          const { data: reintento } = await sbAuth().from('vendedores').select('*').eq('id', userId).maybeSingle();
-          if (reintento) {
-            vendedorData = reintento;
-            if (reintento.onboarding_completo) {
-              populateApp(); showPage('app');
-              await cargarProspectos(userId); await cargarAutos(userId);
-            } else {
-              _preLlenarNombreGoogle(); showPage('onboarding');
-            }
-            return;
-          }
-        }
+      if (emailReal && !data.email) {
+        await sbAuth().from('vendedores').update({ email: emailReal }).eq('id', userId);
+        data.email = emailReal;
       }
 
-      vendedorData = nuevo || { id: userId, email: emailReal, onboarding_completo: false, plan: 'gratis' };
+      return _procesarVendedor(data, userId);
+
+    } else {
+      // El trigger no alcanzó a crear la fila (race condition) — esperar y reintentar
+      console.warn('[Auth] Fila vendedor no encontrada, esperando trigger...');
+      await new Promise(r => setTimeout(r, 2000));
+      const { data: retry } = await sbAuth().from('vendedores').select('*').eq('id', userId).maybeSingle();
+      if (retry) {
+        return _procesarVendedor(retry, userId);
+      }
+      // Último recurso: insertar manualmente
+      const emailFallback = currentUser?.email || window._emailVerificado
+        || localStorage.getItem('cierralo_otp_email') || 'sin-email';
+      await sbAuth().from('vendedores').upsert({
+        id: userId,
+        telefono: emailFallback,
+        email: emailFallback,
+        plan: 'gratis',
+        onboarding_completo: false
+      });
+      vendedorData = { id: userId, email: emailFallback, onboarding_completo: false, plan: 'gratis' };
       _preLlenarNombreGoogle();
       showPage('onboarding');
     }
+
   } catch (e) {
     console.error('[Auth] Error en loadVendedor:', e);
     if (!vendedorData) vendedorData = { id: userId, onboarding_completo: false, plan: 'gratis' };
+    showPage('onboarding');
+  }
+}
+
+function _procesarVendedor(data, userId) {
+  vendedorData = data;
+  if (data.onboarding_completo) {
+    populateApp();
+    showPage('app');
+    cargarProspectos(userId);
+    cargarAutos(userId);
+    window.dispatchEvent(new CustomEvent('cierralo:datosListos'));
+  } else {
+    _preLlenarNombreGoogle();
     showPage('onboarding');
   }
 }
