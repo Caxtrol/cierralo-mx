@@ -879,84 +879,22 @@ function regenerarMensaje(){
 function renderApiKeySection(){
   const container = document.getElementById('perfil-api-section');
   if(!container) return;
-  const keyGuardada = localStorage.getItem('cmx_groq_key') || '';
-  const keyActiva = keyGuardada && keyGuardada !== 'TU_GROQ_API_KEY_AQUI';
 
   container.innerHTML = `
-    <div style="margin-bottom:14px;">
-      <div style="font-family:'Syne',sans-serif;font-size:14px;font-weight:700;color:var(--text);margin-bottom:4px;">
-        🤖 Inteligencia Artificial
+    <div style="background:linear-gradient(135deg,#CC778518,var(--s1));border:1px solid #CC778530;border-radius:12px;padding:14px 16px;display:flex;align-items:center;gap:12px;">
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" style="flex-shrink:0;">
+        <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" stroke="#CC7855" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      <div style="flex:1;">
+        <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:3px;">Inteligencia Artificial activa</div>
+        <div style="font-size:11px;color:var(--text2);">Powered by Claude — mensajes generados en el servidor</div>
       </div>
-      <div style="font-size:11px;color:var(--text2);">Groq (Llama 3.1) genera mensajes — gratis, sin tarjeta</div>
+      <div style="width:9px;height:9px;border-radius:50%;background:var(--green);box-shadow:0 0 8px var(--green);flex-shrink:0;"></div>
     </div>
-    <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
-      <div style="width:9px;height:9px;border-radius:50%;background:${keyActiva ? 'var(--green)' : 'var(--red)'};box-shadow:0 0 8px ${keyActiva ? 'var(--green)' : 'var(--red)'};flex-shrink:0;"></div>
-      <div style="font-size:12px;font-weight:600;color:${keyActiva ? 'var(--green)' : 'var(--red)'};">
-        ${keyActiva ? 'IA activa — mensajes generados con Groq gratis' : 'IA no configurada — usando plantillas básicas'}
-      </div>
-    </div>
-    <div class="form-group">
-      <label class="form-label">API Key de Groq</label>
-      <input class="form-input" id="input-openai-key" type="password"
-        placeholder="sk-..." value="${keyGuardada}"
-        style="font-family:monospace;font-size:12px;letter-spacing:1px;">
-      <div style="font-size:10px;color:var(--text3);margin-top:4px;">
-        Obtén tu key gratis en console.groq.com → API Keys. Sin tarjeta de crédito.
-      </div>
-    </div>
-    <div style="display:flex;gap:8px;">
-      <button class="btn btn-p" style="flex:2;" onclick="guardarApiKey()">💾 Guardar y activar IA</button>
-      ${keyActiva ? '<button class="btn btn-s" style="flex:1;" onclick="probarIA()">🧪 Probar</button>' : ''}
-    </div>
-    ${keyActiva ? `<div style="margin-top:10px;background:var(--greenBg);border:1px solid #22C55E30;border-radius:var(--rs);padding:10px 12px;font-size:11px;color:var(--green);">
-      ✅ IA activa con Groq. Completamente gratis — sin costo por mensaje en el plan gratuito.
-    </div>` : `<div style="margin-top:10px;background:var(--yellowBg);border:1px solid #F59E0B30;border-radius:var(--rs);padding:10px 12px;font-size:11px;color:var(--yellow);">
-      ⚡ Sin API Key la app usa plantillas. Regístrate gratis en console.groq.com para activar la IA.
-    </div>`}
   `;
 }
 
-function guardarApiKey(){
-  const key = document.getElementById('input-openai-key')?.value?.trim();
-  if(!key || key.length < 20){
-    showToast('⚠️ La key debe tener al menos 20 caracteres');
-    return;
-  }
-  localStorage.setItem('cmx_groq_key', key);
-  window.GROQ_KEY = key;
-  showToast('✅ API Key guardada — IA activada');
-  renderApiKeySection();
-}
 
-async function probarIA(){
-  const btn = event.target;
-  btn.textContent = '⏳ Probando...';
-  btn.disabled = true;
-  try {
-    const key = localStorage.getItem('cmx_openai_key');
-    const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-      method:'POST',
-      headers:{'Content-Type':'application/json','Authorization': 'Bearer '+key},
-      body: JSON.stringify({
-        model:'llama-3.1-8b-instant',
-        messages:[{role:'user',content:'Di solo: IA funcionando ✅'}],
-        max_tokens: 20
-      })
-    });
-    const data = await res.json();
-    if(data.choices) showToast('✅ '+data.choices[0].message.content.trim());
-    else showToast('❌ '+(data.error?.message||'Error desconocido'));
-  } catch(e){
-    showToast('❌ Error: '+e.message);
-  }
-  btn.textContent = '🧪 Probar';
-  btn.disabled = false;
-}
-
-(function iniciarKey(){
-  const saved = localStorage.getItem('cmx_groq_key');
-  if(saved) window.OPENAI_KEY = saved;
-})();
 
 const _origGoTo2 = window.goTo;
 window.goTo = function(screen, btn){
