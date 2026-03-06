@@ -456,6 +456,35 @@
             el.style.transition = 'all 0.8s cubic-bezier(0.16, 1, 0.3, 1)';
             observer.observe(el);
         });
+
+        // Borde iluminado en móvil (solo dispositivos sin cursor/touch)
+        // Aplica únicamente a los cards que en PC tienen hover de borde
+        if (window.matchMedia('(hover: none)').matches) {
+            const glowObserver = new IntersectionObserver((entries) => {
+                entries.forEach(entry => {
+                    if (entry.isIntersecting) {
+                        const el = entry.target;
+                        el.style.transition = 'border-color 0.3s ease, box-shadow 0.3s ease';
+                        el.style.borderColor = 'rgba(255, 90, 31, 0.6)';
+                        el.style.boxShadow = '0 0 20px rgba(255, 90, 31, 0.15)';
+                        setTimeout(() => {
+                            el.style.borderColor = '';
+                            el.style.boxShadow = '';
+                        }, 700);
+                        glowObserver.unobserve(el);
+                    }
+                });
+            }, { threshold: 0.25 });
+
+            // Solo los cards con hover configurado en PC
+            document.querySelectorAll([
+                '#como-funciona .group.hover\\:border-\\[var\\(--color-tangerine\\)\\]\\/30',
+                '#funciones .group.transition-all',
+                '#planes .animate-on-scroll.relative.rounded-2xl',
+                '#testimonios .relative.bg-\\[var\\(--color-obsidian\\)\\]',
+                '#blog a.animate-on-scroll'
+            ].join(',')).forEach(el => glowObserver.observe(el));
+        }
     </script>
 </body>
 </html>
