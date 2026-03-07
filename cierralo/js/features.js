@@ -1369,21 +1369,34 @@ window.planActual = window.planActual || 'gratis';
 window.lugaresEliteRestantes = 100;
 
 async function cargarPlanVendedor() {
-  window.planActual = window.planActual || 'gratis';
+  window.planActual            = window.planActual            || 'gratis';
   window.lugaresEliteRestantes = window.lugaresEliteRestantes ?? 100;
-  window.esPrecioLanzamiento = window.esPrecioLanzamiento || false;
+  window.esPrecioLanzamiento   = window.esPrecioLanzamiento   || false;
 
   try {
     const uid = currentUser?.id || window._currentUid;
     if (uid) {
       const { data: v, error: ev } = await sbAuth().from('vendedores')
-        .select('plan, plan_fundador')
+        .select('plan, plan_fundador, mensajes_ia_mes_usado, mensajes_ia_reset_at, plan_vence_en')
         .eq('id', uid)
         .maybeSingle();
-      if (ev) console.warn('cargarPlanVendedor vendedor error:', ev.message);
+
+      if (ev) console.warn('cargarPlanVendedor error:', ev.message);
       if (v) {
-        window.planActual = v.plan || 'gratis';
+        window.planActual        = v.plan || 'gratis';
         window.esPrecioLanzamiento = v.plan_fundador || false;
+
+        // Sincronizar datos de IA en vendedorData
+        if (vendedorData) {
+          vendedorData.plan                  = v.plan || 'gratis';
+          vendedorData.mensajes_ia_mes_usado = v.mensajes_ia_mes_usado || 0;
+          vendedorData.mensajes_ia_reset_at  = v.mensajes_ia_reset_at;
+          vendedorData.plan_vence_en         = v.plan_vence_en;
+        }
+
+        // Verificar vigencia y resetear IA en segundo plano
+        verificarVigenciaPlan().catch(() => {});
+        verificarResetMensajesIA().catch(() => {});
       }
     }
 
@@ -1399,27 +1412,7 @@ async function cargarPlanVendedor() {
   }
 }
 
-async function verificarLimiteProspectos() {
-  if (window.planActual !== 'gratis') return { puede: true };
 
-  const { count } = await sb.from('prospectos')
-    .select('id', { count: 'exact', head: true })
-    .eq('vendedor_id', currentUser.id)
-    .neq('etapa', 'perdido');
-
-  const usados = count || 0;
-  const limite = 25;
-  const restantes = limite - usados;
-
-  if (usados >= limite) return { puede: false, usados, limite, restantes: 0 };
-  if (usados >= 20) return { puede: true, usados, limite, restantes, advertencia: true };
-  return { puede: true, usados, limite, restantes };
-}
-
-function mostrarAdvertenciaLimite(usados, limite) {
-  const restantes = limite - usados;
-  showToast(`⚠️ Te quedan ${restantes} prospectos gratuitos`, 4000);
-}
 
 async function mostrarPantallaPlanesUpgrade(motivo) {
   await cargarPlanVendedor();
@@ -1790,23 +1783,32 @@ styleEl.textContent = `
 document.head.appendChild(styleEl);
 
 async function actualizarCardPlan() {
-  if(!currentUser || !currentUser.id) return;
+  if (!currentUser || !currentUser.id) return;
   const cardNombre = document.getElementById('plan-nombre-badge');
   const cardDesc   = document.getElementById('plan-desc-badge');
   const cardBarra  = document.getElementById('plan-prospectos-barra');
-  if(!cardNombre) return;
+  if (!cardNombre) return;
 
   await cargarPlanVendedor();
-  const plan = window.planActual || 'gratis';
+  const plan = _normalizarPlan(window.planActual || vendedorData?.plan || 'gratis');
 
-  const nombres  = { gratis: 'Gratis', pro: '⚡ Pro', elite: '⭐ Elite' };
-  const colores  = { gratis: 'var(--text2)', pro: 'var(--orange)', elite: 'var(--yellow)' };
+  const nombres = { gratis: 'Gratis', pro: '⚡ Pro', elite: '⭐ Elite' };
+  const colores = { gratis: 'var(--text2)', pro: 'var(--orange)', elite: 'var(--yellow)' };
 
-  cardNombre.textContent   = nombres[plan] || 'Gratis';
-  cardNombre.style.color   = colores[plan] || 'var(--text2)';
+  cardNombre.textContent = nombres[plan] || 'Gratis';
+  cardNombre.style.color = colores[plan] || 'var(--text2)';
 
-  if(plan === 'gratis') {
-    const { count } = await sb.from('prospectos')
+  // Calcular mensajes IA restantes
+  const maxIA      = PLANES_LIMITES[plan]?.mensajes_ia_mes || 20;
+  const usadoIA    = vendedorData?.mensajes_ia_mes_usado || 0;
+  const restantesIA = Math.max(0, maxIA - usadoIA);
+  const pctIA      = Math.min(100, Math.round((usadoIA / maxIA) * 100));
+  const colorIA    = pctIA >= 90 ? 'var(--red)' : pctIA >= 70 ? 'var(--yellow)' : 'var(--green)';
+
+  if (plan === 'gratis') {
+    // Contar prospectos activos
+    const { count } = await sbAuth()
+      .from('prospectos')
       .select('id', { count: 'exact', head: true })
       .eq('vendedor_id', currentUser.id)
       .neq('etapa', 'perdido');
@@ -1815,22 +1817,65 @@ async function actualizarCardPlan() {
     const pct    = Math.min(100, Math.round((usados / 25) * 100));
     const color  = pct >= 80 ? 'var(--red)' : pct >= 60 ? 'var(--yellow)' : 'var(--green)';
 
-    cardDesc.textContent = `${usados} de 25 prospectos usados`;
-    if(cardBarra) cardBarra.innerHTML = `
-      <div style="display:flex;align-items:center;gap:8px;">
-        <div style="flex:1;height:5px;background:var(--s3);border-radius:3px;overflow:hidden;">
-          <div style="height:100%;width:${pct}%;background:${color};border-radius:3px;transition:width .4s;"></div>
+    cardDesc.textContent = `${usados} de 25 prospectos · ${restantesIA} mensajes IA restantes`;
+
+    if (cardBarra) cardBarra.innerHTML = `
+      <div style="display:flex;flex-direction:column;gap:6px;">
+        <div>
+          <div style="font-size:9px;color:var(--text3);margin-bottom:3px;">Prospectos (${usados}/25)</div>
+          <div style="display:flex;align-items:center;gap:8px;">
+            <div style="flex:1;height:5px;background:var(--s3);border-radius:3px;overflow:hidden;">
+              <div style="height:100%;width:${pct}%;background:${color};border-radius:3px;transition:width .4s;"></div>
+            </div>
+            <div style="font-size:10px;color:${color};font-weight:700;flex-shrink:0;">${pct}%</div>
+          </div>
         </div>
-        <div style="font-size:10px;color:${color};font-weight:700;flex-shrink:0;">${pct}%</div>
+        <div>
+          <div style="font-size:9px;color:var(--text3);margin-bottom:3px;">Mensajes IA (${usadoIA}/${maxIA} este mes)</div>
+          <div style="display:flex;align-items:center;gap:8px;">
+            <div style="flex:1;height:5px;background:var(--s3);border-radius:3px;overflow:hidden;">
+              <div style="height:100%;width:${pctIA}%;background:${colorIA};border-radius:3px;transition:width .4s;"></div>
+            </div>
+            <div style="font-size:10px;color:${colorIA};font-weight:700;flex-shrink:0;">${pctIA}%</div>
+          </div>
+        </div>
       </div>`;
-  } else if(plan === 'pro') {
-    cardDesc.textContent = 'Prospectos ilimitados · IA ilimitada';
-    if(cardBarra) cardBarra.innerHTML = '';
+
   } else {
+    // Pro o Elite — mostrar vigencia y mensajes IA
+    const fechaVence = vendedorData?._plan_vence_en || vendedorData?.plan_vence_en;
+    let vigenciaTexto = '';
+
+    if (fechaVence) {
+      const dias = Math.ceil((new Date(fechaVence) - new Date()) / 86400000);
+      if (dias <= 0) {
+        vigenciaTexto = '⚠️ Plan vencido';
+      } else if (dias <= 7) {
+        vigenciaTexto = `⚠️ Vence en ${dias} día${dias !== 1 ? 's' : ''}`;
+      } else {
+        const fecha = new Date(fechaVence);
+        vigenciaTexto = `Vigente hasta ${fecha.getDate()}/${fecha.getMonth() + 1}/${fecha.getFullYear()}`;
+      }
+    }
+
     const lanzamiento = window.esPrecioLanzamiento;
-    cardDesc.textContent = lanzamiento
-      ? 'Vendedor Fundador · Todos los beneficios Elite'
-      : 'Todos los beneficios Elite activos';
-    if(cardBarra) cardBarra.innerHTML = '';
+    const descBase = plan === 'elite'
+      ? lanzamiento ? 'Vendedor Fundador · Elite' : 'Todos los beneficios Elite'
+      : 'Prospectos ilimitados';
+
+    cardDesc.textContent = vigenciaTexto
+      ? `${descBase} · ${vigenciaTexto}`
+      : `${descBase} · ${restantesIA} mensajes IA restantes`;
+
+    if (cardBarra) cardBarra.innerHTML = `
+      <div>
+        <div style="font-size:9px;color:var(--text3);margin-bottom:3px;">Mensajes IA (${usadoIA}/${maxIA} este mes)</div>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <div style="flex:1;height:5px;background:var(--s3);border-radius:3px;overflow:hidden;">
+            <div style="height:100%;width:${pctIA}%;background:${colorIA};border-radius:3px;transition:width .4s;"></div>
+          </div>
+          <div style="font-size:10px;color:${colorIA};font-weight:700;flex-shrink:0;">${restantesIA} restantes</div>
+        </div>
+      </div>`;
   }
 }
